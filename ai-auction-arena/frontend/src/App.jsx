@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Bot, Gavel, Plus, RefreshCw, ShieldCheck, Users, Wallet, Trophy, Upload, Play, Pause, RotateCcw, Search, FileSpreadsheet, Sparkles, ChevronRight, X, Check, Clock3, Target, SlidersHorizontal } from 'lucide-react';
+import IPL2025_AUCTION_PLAYERS from './data/ipl2025AuctionPlayers.json';
 import { createRoom, getFranchises, getHealth, getRoom, listSavedGames, saveGameSnapshot, deleteGameSnapshot, importPlayerFile } from './services/api';
 
 const FRANCHISES = [
@@ -9,9 +10,19 @@ const FRANCHISES = [
   { short_name:'PBKS', name:'Punjab Kings', color:'#d32f2f' }, { short_name:'DC', name:'Delhi Capitals', color:'#1565c0' },
   { short_name:'GT', name:'Gujarat Titans', color:'#174b70' }, { short_name:'LSG', name:'Lucknow Super Giants', color:'#00a6a6' }
 ];
-const DEMO_PLAYERS = [
-  ['Aarav Deshmukh','India','Batter','Right hand','—',0.50],['Dev Malhotra','India','Fast bowler','Right arm fast','—',0.75],['Ishan Verma','India','Wicketkeeper','Right hand','—',1.00],['Karan Gill','India','All-rounder','Right arm medium','—',1.50],['Rohan Nair','India','Leg-spinner','Right arm legbreak','—',0.50],['Zayan Khan','India','Fast bowler','Left arm fast','—',2.00],['Kabir Sethi','India','Batter','Left hand','—',0.30],['Arjun Rao','India','Off-spinner','Right arm offbreak','—',0.40],['Marcus Hale','Australia','Fast bowler','Right arm fast','—',2.00],['Liam Mercer','England','All-rounder','Right arm medium','—',1.50],['Noah Perera','Sri Lanka','Leg-spinner','Right arm legbreak','—',1.00],['Dilan Fernando','Sri Lanka','Batter','Right hand','—',0.50],['Samir Qureshi','India','Wicketkeeper','Left hand','—',0.40],['Vikram Pawar','India','Fast bowler','Right arm fast','—',0.30],['Tushar Kulkarni','India','All-rounder','Off spin','—',0.75],['Ben Carter','New Zealand','Batter','Right hand','—',1.00],['Ravi Bhandari','India','Pacer','Left arm medium','—',0.50],['Akhil Menon','India','Batter','Right hand','—',0.30],['Owen Clarke','South Africa','All-rounder','Right arm fast','—',1.50],['Nikhil Jadhav','India','Wrist spinner','Right arm legbreak','—',0.40]
-].map((p,i)=>({id:`demo-${i+1}`,name:p[0],country:p[1],role:p[2],style:p[3],previous_team:p[4],base_price:p[5],status:'Available'}));
+const DEMO_PLAYERS = IPL2025_AUCTION_PLAYERS.map(p=>({...p}));
+const IPL2025_RETENTIONS = {
+  CSK:{purse:55,players:[['Ruturaj Gaikwad',18],['Matheesha Pathirana',13,'Sri Lanka'],['Shivam Dube',12],['Ravindra Jadeja',18],['MS Dhoni',4]]},
+  DC:{purse:73,players:[['Axar Patel',16.5],['Kuldeep Yadav',13.25],['Tristan Stubbs',10,'South Africa'],['Abhishek Porel',4]]},
+  GT:{purse:69,players:[['Rashid Khan',18,'Afghanistan'],['Shubman Gill',16.5],['Sai Sudharsan',8.5],['Rahul Tewatia',4],['Shahrukh Khan',4]]},
+  KKR:{purse:51,players:[['Rinku Singh',13],['Varun Chakaravarthy',12],['Sunil Narine',12,'West Indies'],['Andre Russell',12,'West Indies'],['Harshit Rana',4],['Ramandeep Singh',4]]},
+  LSG:{purse:69,players:[['Nicholas Pooran',21,'West Indies'],['Ravi Bishnoi',11],['Mayank Yadav',11],['Mohsin Khan',4],['Ayush Badoni',4]]},
+  MI:{purse:45,players:[['Jasprit Bumrah',18],['Suryakumar Yadav',16.35],['Hardik Pandya',16.35],['Rohit Sharma',16.3],['Tilak Varma',8]]},
+  PBKS:{purse:110.5,players:[['Shashank Singh',5.5],['Prabhsimran Singh',4]]},
+  RR:{purse:41,players:[['Sanju Samson',18],['Yashasvi Jaiswal',18],['Riyan Parag',14],['Dhruv Jurel',14],['Shimron Hetmyer',11,'West Indies'],['Sandeep Sharma',4]]},
+  RCB:{purse:83,players:[['Virat Kohli',21],['Rajat Patidar',11],['Yash Dayal',5]]},
+  SRH:{purse:45,players:[['Pat Cummins',18,'Australia'],['Abhishek Sharma',14],['Nitish Kumar Reddy',6],['Heinrich Klaasen',23,'South Africa'],['Travis Head',14,'Australia']]}
+};
 const DEFAULTS = { name:'Friday Night IPL Auction', auction_type:'mini', total_purse:120, max_squad_size:25, min_squad_size:18, max_overseas_players:8, bid_timer_seconds:20, automatic_auctioneer:true, allow_pause_resume:true, difficulty:'realistic', personality:'balanced' };
 const money = n => `₹${Number(n || 0).toFixed(2)} Cr`;
 const readStore = () => { try { return JSON.parse(localStorage.getItem('auction-arena-v1') || '[]'); } catch { return []; } };
@@ -43,9 +54,9 @@ export default function App() {
 
   function saveGame(next){setGame(next);setGames(old=>{const idx=old.findIndex(g=>g.id===next.id);if(idx<0)return [next,...old];const copy=[...old];copy[idx]=next;return copy;});saveGameSnapshot(next).catch(()=>{});}
   async function createAuction(e){e.preventDefault();setError('');if(selected.length<2)return setError('Choose at least two franchises.');if(!humans.some(h=>selected.includes(h)))return setError('Assign at least one human-controlled franchise.');
-    const roster=selectedTeams.map(t=>({code:t.short_name,name:t.name,color:t.color||'#667085',control:humans.includes(t.short_name)?'human':'bot',purse:Number(form.total_purse),startingPurse:Number(form.total_purse),squad:[],overseas:0,needs:{},personality:humans.includes(t.short_name)?'human':['balanced','aggressive','value','conservative'][selected.indexOf(t.short_name)%4]}));
+    const roster=selectedTeams.map(t=>{const retained=IPL2025_RETENTIONS[t.short_name];const squad=(form.auction_type==='mega'&&retained?retained.players:[]).map(([name,sold_price,country='India'],i)=>({id:`retained-${t.short_name}-${i}`,name,country,role:'Batter',base_price:0,status:'Retained',sold_price,retained:true}));const purse=form.auction_type==='mega'&&retained?retained.purse:Number(form.total_purse);return {code:t.short_name,name:t.name,color:t.color||'#667085',control:humans.includes(t.short_name)?'human':'bot',purse,startingPurse:purse,squad,overseas:squad.filter(p=>p.country!=='India').length,needs:{},personality:humans.includes(t.short_name)?'human':['balanced','aggressive','value','conservative'][selected.indexOf(t.short_name)%4]};});
     let serverRoom=null;try{serverRoom=await createRoom({...form,franchise_short_names:selected,human_controlled_short_names:humans.filter(h=>selected.includes(h))});}catch{}
-    const next={id:serverRoom?.id?`room-${serverRoom.id}-${Date.now()}`:`local-${Date.now()}`,server_id:serverRoom?.id||null,name:form.name,format:form.auction_type,status:'setup',createdAt:new Date().toISOString(),rules:{...form},teams:roster,players:players.map(p=>({...p})),queue:players.map(p=>p.id),currentIndex:-1,currentPlayer:null,currentBid:0,highestTeam:null,bidHistory:[],results:[],humanTeam:humans.find(h=>selected.includes(h)),log:[{time:new Date().toISOString(),text:'Auction room created. Squad analysis is ready.'}]};
+    const next={id:serverRoom?.id?`room-${serverRoom.id}-${Date.now()}`:`local-${Date.now()}`,server_id:serverRoom?.id||null,name:form.name,format:form.auction_type,status:'setup',createdAt:new Date().toISOString(),rules:{...form},teams:roster,players:players.filter(p=>!selectedTeams.some(t=>(form.auction_type==='mega'?IPL2025_RETENTIONS[t.short_name]?.players:[])?.some(r=>r[0].toLowerCase()===p.name.toLowerCase()))).map(p=>({...p})),queue:players.filter(p=>!selectedTeams.some(t=>(form.auction_type==='mega'?IPL2025_RETENTIONS[t.short_name]?.players:[])?.some(r=>r[0].toLowerCase()===p.name.toLowerCase()))).map(p=>p.id),currentIndex:-1,currentPlayer:null,currentBid:0,highestTeam:null,bidHistory:[],results:[],humanTeam:humans.find(h=>selected.includes(h)),log:[{time:new Date().toISOString(),text:'Auction room created. Squad analysis is ready.'}]};
     next.teams.forEach(t=>{t.needs=analyseNeeds(t,next.rules);});saveGame(next);setTab('room');
   }
   function analyseNeeds(team,rules){const roles=['Batter','Fast bowler','All-rounder','Wicketkeeper','Spinner'];const counts={};team.squad.forEach(p=>counts[normalRole(p.role)]=(counts[normalRole(p.role)]||0)+1);const target={Batter:7,'Fast bowler':6,'All-rounder':4,Wicketkeeper:2,Spinner:4};return Object.fromEntries(roles.map(r=>[r,Math.max(0,target[r]-(counts[r]||0))]));}
