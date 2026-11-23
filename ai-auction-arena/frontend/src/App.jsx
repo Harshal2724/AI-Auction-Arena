@@ -115,6 +115,11 @@ export default function App() {
   function endAuctionAndCompleteSquads(){
     if(!game||!humanTeam||humanTeam.squad.length<Number(game.rules.min_squad_size)||humanTeam.squad.length>Number(game.rules.max_squad_size))return;
     const g=structuredClone(game);const min=Number(g.rules.min_squad_size);const max=Number(g.rules.max_squad_size);
+    if(g.currentPlayer){
+      const livePlayer=g.players.find(p=>p.id===g.currentPlayer.id);
+      if(g.highestTeam){const winner=g.teams.find(t=>t.code===g.highestTeam);if(winner&&livePlayer){winner.purse=Number((winner.purse-g.currentBid).toFixed(2));winner.squad.push({...livePlayer,status:'Sold',sold_price:g.currentBid,sold_to:winner.code});if(livePlayer.country!=='India')winner.overseas++;livePlayer.status='Sold';livePlayer.sold_to=winner.code;livePlayer.sold_price=g.currentBid;g.results.push({player:livePlayer.name,team:winner.code,price:g.currentBid});logEvent(g,livePlayer.name+' sold to '+winner.code+' for '+money(g.currentBid)+' as the auction was ended.');}}
+      else if(livePlayer&&livePlayer.status==='Available'){livePlayer.status='Unsold';logEvent(g,livePlayer.name+' marked unsold when the auction was ended.');}
+    }
     const roleTargets={Batter:7,'Fast bowler':6,'All-rounder':4,Wicketkeeper:2,Spinner:4};
     const shuffled=a=>a.map(x=>({x,k:Math.random()})).sort((a,b)=>a.k-b.k).map(o=>o.x);
     for(const team of g.teams.filter(t=>t.code!==g.humanTeam)){
