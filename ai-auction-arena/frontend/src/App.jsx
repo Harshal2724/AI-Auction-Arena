@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Bot, Gavel, Plus, RefreshCw, ShieldCheck, Users, Wallet, Trophy, Upload, Play, Pause, RotateCcw, Search, FileSpreadsheet, Sparkles, ChevronRight, X, Check, Clock3, Target, SlidersHorizontal } from 'lucide-react';
+import { Activity, Bot, Gavel, Plus, RefreshCw, ShieldCheck, Users, Wallet, Trophy, Upload, Play, Pause, RotateCcw, Search, FileSpreadsheet, Sparkles, ChevronRight, X, Check, Clock3, Target, SlidersHorizontal, Plane, SkipForward } from 'lucide-react';
 import IPL2025_AUCTION_PLAYERS from './data/ipl2025AuctionPlayers.json';
 import { createRoom, getFranchises, getHealth, getRoom, listSavedGames, saveGameSnapshot, deleteGameSnapshot, importPlayerFile } from './services/api';
 
@@ -23,7 +23,7 @@ const IPL2025_RETENTIONS = {
   RCB:{purse:83,players:[['Virat Kohli',21],['Rajat Patidar',11],['Yash Dayal',5]]},
   SRH:{purse:45,players:[['Pat Cummins',18,'Australia'],['Abhishek Sharma',14],['Nitish Kumar Reddy',6],['Heinrich Klaasen',23,'South Africa'],['Travis Head',14,'Australia']]}
 };
-const DEFAULTS = { name:'IPL 2025 Mega Auction', auction_type:'mega', total_purse:120, max_squad_size:25, min_squad_size:18, max_overseas_players:8, bid_timer_seconds:20, automatic_auctioneer:true, allow_pause_resume:true, difficulty:'realistic', personality:'balanced' };
+const DEFAULTS = { name:'IPL 2025 Mega Auction', auction_type:'mega', total_purse:120, max_squad_size:25, min_squad_size:18, max_overseas_players:8, bid_timer_seconds:10, automatic_auctioneer:true, allow_pause_resume:true, difficulty:'realistic', personality:'balanced' };
 const money = n => `₹${Number(n || 0).toFixed(2)} Cr`;
 const readStore = () => { try { return JSON.parse(localStorage.getItem('auction-arena-v1') || '[]'); } catch { return []; } };
 const writeStore = games => localStorage.setItem('auction-arena-v1', JSON.stringify(games));
@@ -69,7 +69,7 @@ export default function App() {
   function logEvent(g,text){g.log=[...(g.log||[]),{time:new Date().toISOString(),text}].slice(-100);}
   function minimumFutureReserve(team,p,g){const slots=Math.max(0,Number(g.rules.min_squad_size)-team.squad.length-1);if(!slots)return 0;const prices=g.players.filter(x=>x.status==='Available'&&x.id!==p.id).map(x=>Number(x.base_price)||0.2);const cheapest=prices.length?Math.min(...prices):0.2;return slots*cheapest;}
   function availableFor(team,p,g){const overseas=p.country!=='India';return team.purse>=p.base_price && team.squad.length<Number(g.rules.max_squad_size) && (!overseas||team.overseas<Number(g.rules.max_overseas_players)) && team.purse-p.base_price >= minimumFutureReserve(team,p,g);}
-  function botMax(team,p,g){const role=normalRole(p.role);const need=team.needs?.[role]||0;const slotsLeft=Number(g.rules.max_squad_size)-team.squad.length;const budgetAfterReserve=team.purse-minimumFutureReserve(team,p,g);const roleMultiplier=need>=5?2.8:need>=3?2.1:need>=1?1.35:0.55;const scarcity=/Wicketkeeper|Spinner/.test(role)?1.15:1;const personality=team.personality==='aggressive'?1.3:team.personality==='conservative'?0.78:team.personality==='value'?0.92:1;const difficulty=g.rules.difficulty==='advanced'?1.15:1;return Math.max(0,Math.min(budgetAfterReserve,p.base_price*roleMultiplier*scarcity*personality*difficulty,slotsLeft>0?team.purse:0));}
+  function botMax(team,p,g){const role=normalRole(p.role);const need=team.needs?.[role]||0;const slotsLeft=Number(g.rules.max_squad_size)-team.squad.length;const budgetAfterReserve=team.purse-minimumFutureReserve(team,p,g);const stars={'Jos Buttler':12,'Shreyas Iyer':14,'Rishabh Pant':18,'Kagiso Rabada':10,'Arshdeep Singh':10,'Mitchell Starc':12,'Jasprit Bumrah':18,'Suryakumar Yadav':16,'Virat Kohli':18,'Rashid Khan':16,'Heinrich Klaasen':16,'Travis Head':14,'Phil Salt':12,'Mitchell Marsh':10,'David Miller':9,'Mohammed Shami':10,'Yuzvendra Chahal':10,'KL Rahul':12,'Glenn Maxwell':10,'Marcus Stoinis':9,'Liam Livingstone':10,'Sunil Narine':12,'Andre Russell':12,'Pat Cummins':14,'Trent Boult':10,'Mohammed Siraj':9,'Ishan Kishan':10,'Shubman Gill':15,'Sanju Samson':13,'Yashasvi Jaiswal':14,'Ruturaj Gaikwad':13,'Ravindra Jadeja':12,'Hardik Pandya':14,'Rinku Singh':12};const formValue=stars[p.name]||Math.max(p.base_price*2.5,p.base_price+1.5);const roleDemand=need>=5?1.22:need>=3?1.12:need>=1?1:0.78;const scarcity=/Wicketkeeper|Spinner/.test(role)?1.08:1;const personality=team.personality==='aggressive'?1.12:team.personality==='conservative'?0.88:team.personality==='value'?0.94:1;const difficulty=g.rules.difficulty==='advanced'?1.08:1;return Math.max(0,Math.min(budgetAfterReserve,formValue*roleDemand*scarcity*personality*difficulty,slotsLeft>0?team.purse:0));}
   function nextLot(g){let idx=g.currentIndex+1;while(idx<g.queue.length){const p=g.players.find(x=>x.id===g.queue[idx]);if(p&&p.status==='Available')break;idx++;}g.currentIndex=idx;g.currentBid=0;g.highestTeam=null;g.currentPlayer=g.players.find(x=>x.id===g.queue[idx])||null;if(!g.currentPlayer){g.status='completed';logEvent(g,'Auction completed. All available players have been processed.');}else{g.status='live';logEvent(g,`LOT ${idx+1}: ${g.currentPlayer.name} enters at ${money(g.currentPlayer.base_price)}.`);}return g;}
   function beginAuction(){if(!game)return;const g=structuredClone(game);if(g.status==='paused')g.status='live';if(!g.currentPlayer)nextLot(g);else logEvent(g,'Auction resumed.');saveGame(g);}
   function placeBid(teamCode,amount,byBot=false){if(!game||!currentPlayer)return;const g=structuredClone(game);const team=g.teams.find(t=>t.code===teamCode);const bidIncrement = (amount) => amount >= 10 ? 1 : amount >= 5 ? 0.5 : amount >= 2 ? 0.2 : 0.1;
@@ -88,7 +88,7 @@ export default function App() {
   function runBots(){if(!game||!currentPlayer)return;const g=botResponseFor(structuredClone(game));saveGame(g);}
   function sellCurrent(){if(!game||!currentPlayer)return;let g=structuredClone(game);if(g.highestTeam){const winner=g.teams.find(t=>t.code===g.highestTeam);const p=g.players.find(x=>x.id===g.currentPlayer.id);winner.purse=Number((winner.purse-g.currentBid).toFixed(2));winner.squad.push({...p,sold_price:g.currentBid});if(p.country!=='India')winner.overseas++;p.status='Sold';p.sold_to=winner.code;p.sold_price=g.currentBid;g.results.push({player:p.name,team:winner.code,price:g.currentBid});winner.needs=analyseNeeds(winner,g.rules);logEvent(g,`${p.name} SOLD to ${winner.code} for ${money(g.currentBid)}.`);}else{const p=g.players.find(x=>x.id===g.currentPlayer.id);p.status='Unsold';logEvent(g,`${p.name} goes UNSOLD.`);}g=nextLot(g);saveGame(g);}
   function pauseGame(){if(!game)return;const g=structuredClone(game);g.status='paused';logEvent(g,'Auction paused and saved.');saveGame(g);}
-  function humanBid(){if(!humanTeam||!currentPlayer)return;const val=Number(bidAmount);placeBid(humanTeam.code,val,false);setBidAmount('');}
+  function humanBid(){if(!humanTeam||!currentPlayer)return;const inc=currentBid>=10?1:currentBid>=5?0.5:currentBid>=2?0.2:0.1;const val=Number((currentBid?currentBid+inc:currentPlayer.base_price).toFixed(2));placeBid(humanTeam.code,val,false);}
   async function importFile(file){
     if(!file)return;setUploadMessage('Reading player file…');
     try{
@@ -120,22 +120,25 @@ export default function App() {
         <div className="source-note"><Sparkles size={16}/><span><b>Demo player pool loaded.</b> These are sample entries, not a verified official auction list. Import your own CSV before a real-world simulation.</span></div>{error&&<div className="error">{error}</div>}<button className="primary-btn" type="submit"><Play size={17}/> Create auction room</button></form>
         <aside className="side-column"><div className="panel summary-panel"><div className="eyebrow">LIVE CONFIGURATION</div><h2>Room overview</h2><div className="metric"><Users/><div><strong>{selected.length}</strong><span>Franchises selected</span></div></div><div className="metric"><Bot/><div><strong>{botCount}</strong><span>AI-controlled franchises</span></div></div><div className="metric"><Wallet/><div><strong>{money(form.total_purse)}</strong><span>Starting purse per franchise</span></div></div><div className="metric"><Activity/><div><strong>{form.auction_type.toUpperCase()}</strong><span>Auction format</span></div></div><div className="note"><b>AI squad planning</b><p>Each bot tracks role coverage, remaining budget, overseas availability and squad size. Its maximum bid changes with its needs.</p></div></div><div className="panel import-card"><div className="eyebrow">CUSTOM PLAYER POOL</div><h3>Bring your own auction list</h3><p>Upload PDF, XLSX or CSV. The backend extracts player fields into a reviewable pool; CSV also has an offline browser fallback.</p><button className="secondary-btn" onClick={()=>fileRef.current?.click()}><Upload size={15}/> Import player file</button><input ref={fileRef} type="file" accept=".csv,.xlsx,.xlsm,.pdf,text/csv,application/pdf" hidden onChange={e=>importFile(e.target.files?.[0])}/>{uploadMessage&&<p className="upload-message">{uploadMessage}</p>}</div></aside></div>}
       {tab==='players'&&<div className="panel pool-panel"><div className="panel-heading"><div><div className="eyebrow">PLAYER DATABASE</div><h2>Available player pool</h2><p>{players.length} players · Demo dataset or your imported CSV</p></div><button className="secondary-btn" onClick={()=>fileRef.current?.click()}><Upload size={15}/> Import player file</button><input ref={fileRef} type="file" accept=".csv,.xlsx,.xlsm,.pdf,text/csv,application/pdf" hidden onChange={e=>importFile(e.target.files?.[0])}/></div><div className="searchbar"><Search size={17}/><input placeholder="Search player name" value={search} onChange={e=>setSearch(e.target.value)}/></div>{uploadMessage&&<div className="source-note">{uploadMessage}</div>}<div className="table-wrap"><table><thead><tr><th>PLAYER NAME</th><th>BASE PRICE</th></tr></thead><tbody>{filteredPlayers.map(p=><tr key={p.id}><td><b>{p.name}</b></td><td>{money(p.base_price)}</td></tr>)}</tbody></table></div><p className="muted small">Official IPL 2025 mega-auction player pool. Prices are displayed in crore (₹ Cr); nationality and role are retained internally for auction eligibility and squad rules.</p></div>}
-      {tab==='room'&&game&&<AuctionRoom game={game} currentPlayer={currentPlayer} currentBid={currentBid} highestTeam={highestTeam} humanTeam={humanTeam} bidAmount={bidAmount} setBidAmount={setBidAmount} onStart={beginAuction} onBid={humanBid} onBotRound={runBots} onSell={sellCurrent} onPause={pauseGame} onRefresh={()=>{const g=readStore().find(x=>x.id===game.id);if(g)setGame(g);}} onBack={()=>setTab('saved')} error={error} setError={setError}/>}
+      {tab==='room'&&game&&<AuctionRoom game={game} currentPlayer={currentPlayer} currentBid={currentBid} highestTeam={highestTeam} humanTeam={humanTeam} bidAmount={bidAmount} setBidAmount={setBidAmount} onStart={beginAuction} onBid={humanBid} onBotRound={runBots} onSell={sellCurrent} onSkip={()=>{if(!game||!currentPlayer)return;const g=structuredClone(game);const p=g.players.find(x=>x.id===g.currentPlayer.id);p.status='Skipped';logEvent(g,`${p.name} skipped by ${g.humanTeam}.`);saveGame(nextLot(g));}} onPause={pauseGame} onRefresh={()=>{const g=readStore().find(x=>x.id===game.id);if(g)setGame(g);}} onBack={()=>setTab('saved')} error={error} setError={setError}/>}
       {tab==='saved'&&<div className="panel saved-panel"><div className="panel-heading"><div><div className="eyebrow">YOUR AUCTIONS</div><h2>Saved auction rooms</h2><p>Games are saved automatically in this browser.</p></div></div>{games.length===0?<div className="empty-state"><Trophy size={30}/><h3>No saved auctions yet</h3><p>Create an auction to see it here.</p><button className="primary-btn" onClick={()=>setTab('setup')}>Create first auction</button></div>:<div className="saved-list">{games.map(g=><div className="saved-item" key={g.id}><div className="saved-icon"><Gavel/></div><div className="saved-info"><b>{g.name}</b><span>{g.format.toUpperCase()} · {g.teams.length} teams · {g.results.length} purchases · {new Date(g.createdAt).toLocaleString()}</span></div><span className={`game-status ${g.status}`}>{g.status}</span><button className="secondary-btn compact" onClick={()=>openSaved(g)}>Open <ChevronRight size={14}/></button><button className="icon-btn" title="Delete" onClick={()=>{if(confirm('Delete this saved auction?')){setGames(old=>old.filter(x=>x.id!==g.id));deleteGameSnapshot(g.id).catch(()=>{});}}}><X size={16}/></button></div>)}</div>}</div>}
     </main><footer><span>AUCTION ARENA</span><span>Demo build · v0.2.0 · Browser autosave</span></footer>
   </div>;
 }
 
-function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmount,setBidAmount,onStart,onBid,onBotRound,onSell,onPause,onBack,error,setError}) {
+function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmount,setBidAmount,onStart,onBid,onBotRound,onSell,onSkip,onPause,onBack,error,setError}) {
   const [showSquads,setShowSquads] = useState(false);
   const [showSoldPlayers,setShowSoldPlayers] = useState(true);
   const [activity,setActivity] = useState(true);
+  const [showTeams,setShowTeams] = useState(false);
+  const [flashCountdown,setFlashCountdown] = useState(false);
   const [secondsLeft,setSecondsLeft] = useState(Number(game.rules.bid_timer_seconds || 20));
   useEffect(() => {
     if (game.status !== 'live' || !currentPlayer || !game.rules.automatic_auctioneer) return;
     setSecondsLeft(Number(game.rules.bid_timer_seconds || 20));
     const interval = setInterval(() => setSecondsLeft(value => {
       if (value <= 1) { clearInterval(interval); onSell(); return 0; }
+      if (value <= 4) setFlashCountdown(true); else setFlashCountdown(false);
       return value - 1;
     }), 1000);
     return () => clearInterval(interval);
@@ -175,6 +178,7 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
         ) : (
           <>
             <div className="lot-label"><span>LOT {game.currentIndex + 1}</span><span>{game.rules.automatic_auctioneer ? `BID CLOSES IN ${secondsLeft}s` : 'MANUAL LOT CONTROL'}</span><span>{game.queue.length - game.currentIndex - 1} players after this</span></div>
+            {flashCountdown && <div className="countdown-flash" key={secondsLeft}>{secondsLeft <= 3 ? secondsLeft : "SELLING SOON"}</div>}
             <div className="player-stage">
               <div className="player-avatar"><span>{currentPlayer?.name?.split(' ').map(s => s[0]).join('').slice(0,2) || '??'}</span></div>
               <div className="player-info">
@@ -186,26 +190,22 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
               <div className="live-bid"><span>CURRENT BID</span><strong>{money(currentBid || currentPlayer?.base_price)}</strong><small>{highestTeam ? `${highestTeam.name} leading` : 'Awaiting opening bid'}</small></div>
             </div>
             <div className="bid-controls">
-              <div className="bid-entry">
-                <label>YOUR BID (₹ CRORE)</label>
-                <div className="bid-input-wrap"><input type="number" min={minBid} step="0.10" placeholder={minBid.toFixed(2)} value={bidAmount} onChange={e => setBidAmount(e.target.value)}/><button className="primary-btn" onClick={onBid} disabled={!bidAmount || Number(bidAmount) < minBid || !humanTeam || highestTeam?.code === humanTeam.code}>Place bid</button></div>
-                <small>Minimum next bid: {money(minBid)} · Next increment: {money(bidIncrement(currentBid || currentPlayer?.base_price || 0))}</small>
-              </div>
+              <div className="bid-entry"><label>YOUR NEXT BID</label><div className="bid-input-wrap"><button className="primary-btn bid-now" onClick={onBid} disabled={!humanTeam || highestTeam?.code === humanTeam.code || !currentPlayer || humanTeam?.purse < minBid}>BID {money(minBid)}</button><button className="secondary-btn" onClick={onSkip}><SkipForward size={15}/> Skip player</button></div><small>One tap bids the next valid increment automatically.</small></div>
               <div className="auction-actions"><button className="secondary-btn" onClick={onPause}><Pause size={15}/> Pause auction</button></div>
             </div>
             {error && <div className="error">{error}<button onClick={() => setError('')}>Dismiss</button></div>}
           </>
         )}
-        <div className="room-bottom"><button className="text-btn" onClick={() => setShowSquads(!showSquads)}><Users size={15}/>{showSquads ? 'Hide' : 'View'} squads and needs</button><button className="text-btn" onClick={() => setShowSoldPlayers(!showSoldPlayers)}><Trophy size={15}/>{showSoldPlayers ? 'Hide' : 'View'} sold players ({game.results.length})</button><button className="text-btn" onClick={() => setActivity(!activity)}><Activity size={15}/>{activity ? 'Hide' : 'Show'} bid history</button></div>
+        <div className="room-bottom"><button className="text-btn" onClick={() => setShowSquads(!showSquads)}><Users size={15}/>{showSquads ? 'Hide' : 'View'} squads and needs</button><button className="text-btn" onClick={() => setShowTeams(!showTeams)}><Users size={15}/>{showTeams ? "Hide" : "View"} all team squads</button><button className="text-btn" onClick={() => setShowSoldPlayers(!showSoldPlayers)}><Trophy size={15}/>{showSoldPlayers ? 'Hide' : 'View'} sold players ({game.results.length})</button><button className="text-btn" onClick={() => setActivity(!activity)}><Activity size={15}/>{activity ? 'Hide' : 'Show'} bid history</button></div>
         {showSoldPlayers && <div className="sold-players-panel">
           <div className="section-title"><div><h3>Sold players</h3><p>Completed purchases in this auction</p></div><b>{game.results.length} sold</b></div>
           {game.results.length ? <div className="table-wrap"><table><thead><tr><th>PLAYER</th><th>FRANCHISE</th><th>SOLD PRICE</th></tr></thead><tbody>{game.results.slice().reverse().map((r,i)=>{const player=game.players.find(p=>p.name===r.player);const team=game.teams.find(t=>t.code===r.team);return <tr key={`${r.player}-${i}`}><td><b>{r.player}</b><small className="sold-role">{player?.role || '—'}</small></td><td><span className="franchise-badge sold-team-badge" style={{background:team?.color || '#344054'}}>{r.team}</span> {team?.name || r.team}</td><td><b className="sold-price">{money(r.price)}</b></td></tr>;})}</tbody></table></div> : <div className="sold-empty">No players have been sold yet. Completed purchases will appear here automatically.</div>}
         </div>}
-        {showSquads && <div className="team-squad-grid">{game.teams.map(t => (
+        {(showSquads || showTeams) && <div className="team-squad-grid">{game.teams.map(t => (
           <div className="squad-card" key={t.code}>
             <div className="squad-head"><b>{t.code}</b><span>{money(t.purse)}</span></div>
             <small>{t.squad.length} players · {t.overseas} overseas · {t.control === 'bot' ? 'AI' : 'Human'}</small>
-            <div className="squad-names">{t.squad.length ? t.squad.map(p => <span key={p.id}>{p.name}<i>{money(p.sold_price)}</i></span>) : <em>No purchases yet</em>}</div>
+            <div className="squad-names">{t.squad.length ? t.squad.map(p => <span key={p.id}>{p.name}{p.country !== 'India' && <Plane size={12} title='Overseas player'/>}<i>{p.retained ? 'Retained' : money(p.sold_price)}</i></span>) : <em>No purchases yet</em>}</div>
             {t.control === 'bot' && <div className="need-chips">{Object.entries(t.needs || {}).filter(([,v]) => v > 0).slice(0,3).map(([r,v]) => <i key={r}>{r}: {v}</i>)}</div>}
           </div>
         ))}</div>}
