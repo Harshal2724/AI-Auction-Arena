@@ -117,6 +117,7 @@ export default function App() {
 
 function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmount,setBidAmount,onStart,onBid,onBotRound,onSell,onPause,onBack,error,setError}) {
   const [showSquads,setShowSquads] = useState(false);
+  const [showSoldPlayers,setShowSoldPlayers] = useState(true);
   const [activity,setActivity] = useState(true);
   const [secondsLeft,setSecondsLeft] = useState(Number(game.rules.bid_timer_seconds || 20));
   useEffect(() => {
@@ -177,14 +178,18 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
               <div className="bid-entry">
                 <label>YOUR BID (₹ CRORE)</label>
                 <div className="bid-input-wrap"><input type="number" min={minBid} step="0.10" placeholder={minBid.toFixed(2)} value={bidAmount} onChange={e => setBidAmount(e.target.value)}/><button className="primary-btn" onClick={onBid} disabled={!bidAmount || Number(bidAmount) < minBid || !humanTeam || highestTeam?.code === humanTeam.code}>Place bid</button></div>
-                <small>Minimum next bid: {money(minBid)} · Minimum increment: ₹0.10 Cr</small>
+                <small>Minimum next bid: {money(minBid)} · Next increment: {money(bidIncrement(currentBid || currentPlayer?.base_price || 0))}</small>
               </div>
               <div className="auction-actions"><button className="secondary-btn" onClick={onPause}><Pause size={15}/> Pause auction</button></div>
             </div>
             {error && <div className="error">{error}<button onClick={() => setError('')}>Dismiss</button></div>}
           </>
         )}
-        <div className="room-bottom"><button className="text-btn" onClick={() => setShowSquads(!showSquads)}><Users size={15}/>{showSquads ? 'Hide' : 'View'} squads and needs</button><button className="text-btn" onClick={() => setActivity(!activity)}><Activity size={15}/>{activity ? 'Hide' : 'Show'} bid history</button></div>
+        <div className="room-bottom"><button className="text-btn" onClick={() => setShowSquads(!showSquads)}><Users size={15}/>{showSquads ? 'Hide' : 'View'} squads and needs</button><button className="text-btn" onClick={() => setShowSoldPlayers(!showSoldPlayers)}><Trophy size={15}/>{showSoldPlayers ? 'Hide' : 'View'} sold players ({game.results.length})</button><button className="text-btn" onClick={() => setActivity(!activity)}><Activity size={15}/>{activity ? 'Hide' : 'Show'} bid history</button></div>
+        {showSoldPlayers && <div className="sold-players-panel">
+          <div className="section-title"><div><h3>Sold players</h3><p>Completed purchases in this auction</p></div><b>{game.results.length} sold</b></div>
+          {game.results.length ? <div className="table-wrap"><table><thead><tr><th>PLAYER</th><th>FRANCHISE</th><th>SOLD PRICE</th></tr></thead><tbody>{game.results.slice().reverse().map((r,i)=>{const player=game.players.find(p=>p.name===r.player);const team=game.teams.find(t=>t.code===r.team);return <tr key={`${r.player}-${i}`}><td><b>{r.player}</b><small className="sold-role">{player?.role || '—'}</small></td><td><span className="franchise-badge sold-team-badge" style={{background:team?.color || '#344054'}}>{r.team}</span> {team?.name || r.team}</td><td><b className="sold-price">{money(r.price)}</b></td></tr>;})}</tbody></table></div> : <div className="sold-empty">No players have been sold yet. Completed purchases will appear here automatically.</div>}
+        </div>}
         {showSquads && <div className="team-squad-grid">{game.teams.map(t => (
           <div className="squad-card" key={t.code}>
             <div className="squad-head"><b>{t.code}</b><span>{money(t.purse)}</span></div>
