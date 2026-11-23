@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Bot, Gavel, Plus, RefreshCw, ShieldCheck, Users, Wallet, Trophy, Upload, Play, Pause, RotateCcw, Search, FileSpreadsheet, Sparkles, ChevronRight, X, Check, Clock3, Target, SlidersHorizontal } from 'lucide-react';
 import { createRoom, getFranchises, getHealth, getRoom, listSavedGames, saveGameSnapshot, deleteGameSnapshot, importPlayerFile } from './services/api';
 
