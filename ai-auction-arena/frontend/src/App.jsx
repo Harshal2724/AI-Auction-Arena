@@ -61,18 +61,16 @@ export default function App() {
   function botMax(team,p,g){const role=normalRole(p.role);const need=team.needs?.[role]||0;const slotsLeft=Number(g.rules.max_squad_size)-team.squad.length;const budgetAfterReserve=team.purse-minimumFutureReserve(team,p,g);const roleMultiplier=need>=5?2.8:need>=3?2.1:need>=1?1.35:0.55;const scarcity=/Wicketkeeper|Spinner/.test(role)?1.15:1;const personality=team.personality==='aggressive'?1.3:team.personality==='conservative'?0.78:team.personality==='value'?0.92:1;const difficulty=g.rules.difficulty==='advanced'?1.15:1;return Math.max(0,Math.min(budgetAfterReserve,p.base_price*roleMultiplier*scarcity*personality*difficulty,slotsLeft>0?team.purse:0));}
   function nextLot(g){let idx=g.currentIndex+1;while(idx<g.queue.length){const p=g.players.find(x=>x.id===g.queue[idx]);if(p&&p.status==='Available')break;idx++;}g.currentIndex=idx;g.currentBid=0;g.highestTeam=null;g.currentPlayer=g.players.find(x=>x.id===g.queue[idx])||null;if(!g.currentPlayer){g.status='completed';logEvent(g,'Auction completed. All available players have been processed.');}else{g.status='live';logEvent(g,`LOT ${idx+1}: ${g.currentPlayer.name} enters at ${money(g.currentPlayer.base_price)}.`);}return g;}
   function beginAuction(){if(!game)return;const g=structuredClone(game);if(g.status==='paused')g.status='live';if(!g.currentPlayer)nextLot(g);else logEvent(g,'Auction resumed.');saveGame(g);}
-  function placeBid(teamCode,amount,byBot=false){if(!game||!currentPlayer)return;const g=structuredClone(game);const team=g.teams.find(t=>t.code===teamCode);const min=Math.max(currentBid?currentBid+0.1:currentPlayer.base_price,currentPlayer.base_price);const value=Number(amount.toFixed(2));if(!team||value+1e-6<min||value>team.purse||!availableFor(team,currentPlayer,g)){if(!byBot)setError('That bid is not valid for this franchise.');return;}g.currentBid=value;g.highestTeam=teamCode;g.bidHistory.push({playerId:currentPlayer.id,team:teamCode,amount:value,time:new Date().toISOString(),bot:byBot});logEvent(g,`${team.code} ${byBot?'(AI) ':''}bids ${money(value)} for ${currentPlayer.name}.`);saveGame(g);setError('');}
+  function placeBid(teamCode,amount,byBot=false){if(!game||!currentPlayer)return;const g=structuredClone(game);const team=g.teams.find(t=>t.code===teamCode);const bidIncrement = (amount) => amount >= 10 ? 1 : amount >= 5 ? 0.5 : amount >= 2 ? 0.2 : 0.1;
+    const min=Math.max(currentBid?currentBid+bidIncrement(currentBid):currentPlayer.base_price,currentPlayer.base_price);const value=Number(amount.toFixed(2));if(!team||value+1e-6<min||value>team.purse||!availableFor(team,currentPlayer,g)){if(!byBot)setError('That bid is not valid for this franchise.');return;}g.currentBid=value;g.highestTeam=teamCode;g.bidHistory.push({playerId:currentPlayer.id,team:teamCode,amount:value,time:new Date().toISOString(),bot:byBot});logEvent(g,`${team.code} ${byBot?'(AI) ':''}bids ${money(value)} for ${currentPlayer.name}.`);saveGame(g);setError('');}
   function botResponseFor(g){
     const p=g.currentPlayer;if(!p)return g;
-    const nextMin=g.currentBid?g.currentBid+0.1:p.base_price;
+    const bidIncrement = (amount) => amount >= 10 ? 1 : amount >= 5 ? 0.5 : amount >= 2 ? 0.2 : 0.1;
+    const nextMin=g.currentBid?g.currentBid+bidIncrement(g.currentBid):p.base_price;
     const candidates=g.teams.filter(t=>t.control==='bot'&&t.code!==g.highestTeam&&availableFor(t,p,g)&&botMax(t,p,g)>=nextMin);
-    if(!candidates.length){
-      if(g.highestTeam){const winner=g.teams.find(t=>t.code===g.highestTeam);winner.purse=Number((winner.purse-g.currentBid).toFixed(2));winner.squad.push({...p,sold_price:g.currentBid});if(p.country!=='India')winner.overseas++;p.status='Sold';p.sold_to=winner.code;p.sold_price=g.currentBid;g.results.push({player:p.name,team:winner.code,price:g.currentBid});winner.needs=analyseNeeds(winner,g.rules);logEvent(g,`${p.name} SOLD to ${winner.code} for ${money(g.currentBid)}.`);}
-      else{p.status='Unsold';logEvent(g,`${p.name} goes UNSOLD.`);}
-      g=nextLot(g);return g;
-    }
+    if(!candidates.length){ return g; }
     candidates.sort((a,b)=>(botMax(b,p,g)-g.currentBid)-(botMax(a,p,g)-g.currentBid));
-    const bidder=candidates[0];const increment=g.currentBid<1?0.1:g.currentBid<5?0.25:0.5;const offer=Number((g.currentBid?g.currentBid+increment:p.base_price).toFixed(2));
+    const bidder=candidates[0];const increment=bidIncrement(g.currentBid);const offer=Number((g.currentBid?g.currentBid+increment:p.base_price).toFixed(2));
     if(offer>botMax(bidder,p,g))return g;
     g.currentBid=offer;g.highestTeam=bidder.code;g.bidHistory.push({playerId:p.id,team:bidder.code,amount:offer,time:new Date().toISOString(),bot:true});logEvent(g,`${bidder.code} (AI) bids ${money(offer)} for ${p.name}.`);return g;
   }
@@ -130,8 +128,15 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
     }), 1000);
     return () => clearInterval(interval);
   }, [game.currentPlayer?.id, currentBid, game.status, game.rules.automatic_auctioneer, game.rules.bid_timer_seconds]);
+  useEffect(() => {
+    if (game.status !== 'live' || !currentPlayer || !game.rules.automatic_auctioneer) return;
+    if (highestTeam?.code === humanTeam?.code) return;
+    const timer = setTimeout(() => onBotRound(), 1200);
+    return () => clearTimeout(timer);
+  }, [game.status, currentPlayer?.id, currentBid, highestTeam?.code, humanTeam?.code, game.rules.automatic_auctioneer]);
   const topBids = game.bidHistory.slice(-8).reverse();
-  const minBid = currentBid ? currentBid + 0.1 : (currentPlayer?.base_price || 0);
+  const bidIncrement = (amount) => amount >= 10 ? 1 : amount >= 5 ? 0.5 : amount >= 2 ? 0.2 : 0.1;
+  const minBid = currentBid ? currentBid + bidIncrement(currentBid) : (currentPlayer?.base_price || 0);
   const isReady = game.status === 'setup' || game.status === 'paused';
   return (
     <div className="auction-layout">
@@ -175,7 +180,7 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
                 <div className="bid-input-wrap"><input type="number" min={minBid} step="0.10" placeholder={minBid.toFixed(2)} value={bidAmount} onChange={e => setBidAmount(e.target.value)}/><button className="primary-btn" onClick={onBid} disabled={!bidAmount || Number(bidAmount) < minBid || !humanTeam || highestTeam?.code === humanTeam.code}>Place bid</button></div>
                 <small>Minimum next bid: {money(minBid)} · Minimum increment: ₹0.10 Cr</small>
               </div>
-              <div className="auction-actions"><button className="secondary-btn" onClick={onBotRound}><Bot size={15}/> Run AI bids</button><button className="secondary-btn" onClick={onSell}><Check size={15}/> Close lot</button><button className="secondary-btn" onClick={onPause}><Pause size={15}/> Pause</button></div>
+              <div className="auction-actions"><button className="secondary-btn" onClick={onPause}><Pause size={15}/> Pause auction</button></div>
             </div>
             {error && <div className="error">{error}<button onClick={() => setError('')}>Dismiss</button></div>}
           </>
