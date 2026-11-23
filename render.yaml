@@ -1,10 +1,11 @@
-# Render Blueprint for a single-origin full-stack deployment.
-# The free database is intended for evaluation; choose a paid database for durable production use.
+# Render Blueprint for AI Auction Arena.
+# The application source lives in the ai-auction-arena/ directory.
 services:
   - type: web
     name: ai-auction-arena
     runtime: docker
     plan: free
+    rootDir: ai-auction-arena
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
@@ -13,8 +14,6 @@ services:
         fromDatabase:
           name: ai-auction-arena-db
           property: connectionString
-      - key: PYTHON_VERSION
-        value: 3.12.
 
 databases:
   - name: ai-auction-arena-db
