@@ -220,6 +220,19 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
     const timer = setTimeout(() => onBotRound(), 1200);
     return () => clearTimeout(timer);
   }, [game.status, currentPlayer?.id, currentBid, highestTeam?.code, humanTeam?.code, game.rules.automatic_auctioneer]);
+  function assessTeam(t){
+    const s=t.squad||[],c={Batter:0,'Fast bowler':0,'All-rounder':0,Wicketkeeper:0,Spinner:0};
+    s.forEach(p=>{const r=/keeper/i.test(p.role||'')?'Wicketkeeper':/all/i.test(p.role||'')?'All-rounder':/spin|leg|off/i.test(p.role||'')?'Spinner':/bowl|pace|fast|medium/i.test(p.role||'')?'Fast bowler':'Batter';c[r]++;});
+    const targets={Batter:5,'Fast bowler':5,'All-rounder':2,Wicketkeeper:2,Spinner:2};
+    const strengths=[];if(c.Batter>=6)strengths.push('Batting depth');if(c['Fast bowler']>=5)strengths.push('Pace bowling depth');if(c.Spinner>=2)strengths.push('Spin options');if(c['All-rounder']>=3)strengths.push('All-rounder flexibility');if(c.Wicketkeeper>=2)strengths.push('Keeper backup');if(t.overseas>=7)strengths.push('Overseas balance');
+    const weaknesses=[];if(c.Batter<5)weaknesses.push('Batting depth');if(c['Fast bowler']<5)weaknesses.push('Fast-bowling backup');if(c.Spinner<2)weaknesses.push('Spin backup');if(c['All-rounder']<2)weaknesses.push('All-rounder options');if(c.Wicketkeeper<2)weaknesses.push('Second wicketkeeper');if(t.overseas<7)weaknesses.push('Overseas balance: '+t.overseas+'/7');
+    const form={'Sai Sudharsan':1,'Suryakumar Yadav':1,'Virat Kohli':0.95,'Shubman Gill':0.95,'Shreyas Iyer':1,'KL Rahul':0.9,'Jos Buttler':0.95,'Nicholas Pooran':1,'Heinrich Klaasen':0.95,'Abhishek Sharma':0.9,'Prasidh Krishna':1,'Noor Ahmad':0.95,'Josh Hazlewood':0.95,'Arshdeep Singh':0.95,'Jasprit Bumrah':1,'Varun Chakaravarthy':0.9,'Trent Boult':0.9};
+    const q=s.length?s.reduce((v,p)=>v+Math.min(1.15,0.58+Math.min(1,Math.log1p(Number(p.sold_price||p.base_price||0.3))/Math.log(16))*0.35+(form[p.name]||0)*0.18),0)/s.length:0;
+    const role=Object.keys(targets).reduce((v,r)=>v+Math.min(1,c[r]/targets[r]),0)/5;const backup=Object.keys(targets).reduce((v,r)=>v+(c[r]>=targets[r]+2?1:c[r]>=targets[r]?0.65:c[r]>=targets[r]-1?0.3:0),0)/5;
+    const rating=Math.max(2.5,Math.min(9.8,10*(0.34*role+0.24*q+0.18*Math.min(1,s.length/18)+0.12*Math.min(1,t.overseas/7)+0.12*backup)));
+    if(!strengths.length)strengths.push('No standout unit yet');if(!weaknesses.length)weaknesses.push('No major role gap; monitor form and workload');
+    const top=s.slice().sort((a,b)=>((form[b.name]||0)+(Number(b.sold_price)||0)/30)-((form[a.name]||0)+(Number(a.sold_price)||0)/30)).slice(0,3).map(p=>p.name);return {rating,strengths,weaknesses,top};
+  }
   const topBids = game.bidHistory.slice(-8).reverse();
   const bidIncrement = (amount) => amount >= 10 ? 1 : amount >= 5 ? 0.5 : amount >= 2 ? 0.2 : 0.1;
   const minBid = currentBid ? currentBid + bidIncrement(currentBid) : (currentPlayer?.base_price || 0);
@@ -247,7 +260,7 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
           </div>
         ) : game.status === 'completed' ? (
           <><div className="auction-placeholder"><Trophy size={42}/><h2>Auction completed</h2><p>{game.results.length} players sold. Your results are saved.</p><button className="secondary-btn" onClick={onBack}>View saved auctions</button></div>
-          <div className="team-squad-grid">{game.teams.map(t=>{const count={Batter:0,Bowler:0,Spinner:0,'All-rounder':0,Wicketkeeper:0};t.squad.forEach(p=>{const r=/keeper/i.test(p.role)?'Wicketkeeper':/all/i.test(p.role)?'All-rounder':/spin|leg|off/i.test(p.role)?'Spinner':/bowl|pace|fast|medium/i.test(p.role)?'Bowler':'Batter';count[r]++;});const roleList=Object.entries(count).sort((a,b)=>b[1]-a[1]);const strengths=roleList.filter(x=>x[1]>=2).slice(0,2).map(x=>x[0]);const gaps=Object.entries({Batter:4,Bowler:4,Spinner:2,'All-rounder':2,Wicketkeeper:1}).filter(([r,n])=>count[r]<n).map(x=>x[0]);const top=t.squad.slice().sort((a,b)=>(b.sold_price||b.base_price||0)-(a.sold_price||a.base_price||0)).slice(0,3).map(p=>p.name);const completeness=Object.values(count).reduce((s,n)=>s+Math.min(n,({Batter:4,Bowler:4,Spinner:2,'All-rounder':2,Wicketkeeper:1}[Object.keys(count).find(k=>count[k]===n)]||1)),0);const score=Math.max(3.5,Math.min(9.8,5+Math.min(t.squad.length,18)*.18-gaps.length*.35+(t.squad.length>=16?.5:0)));return <div className="squad-card" key={t.code}><div className="squad-head"><b>{t.name}</b><strong>{score.toFixed(1)}/10</strong></div><p><b>Strengths:</b> {strengths.join(', ')||'Needs more squad depth'}</p><p><b>Weaknesses:</b> {gaps.join(', ')||'No major role gaps identified'}</p><p><b>Players to watch:</b> {top.join(', ')||'No purchases yet'}</p></div>;})}</div></>
+          <div className="team-squad-grid">{game.teams.map(t=>{const a=assessTeam(t);return <div className="squad-card" key={t.code}><div className="squad-head"><b>{t.name}</b><strong>{a.rating.toFixed(1)}/10</strong></div><p><b>Strengths:</b> {a.strengths.join(", ")}</p><p><b>Weaknesses:</b> {a.weaknesses.join(", ")}</p><p><b>Players to watch:</b> {a.top.join(", ")||"No purchases yet"}</p><p><b>Squad:</b> {t.squad.length} players · {t.overseas} overseas · {money(t.purse)} left</p></div>;})}</div></>
         ) : (
           <>
             <div className="lot-label"><span>LOT {game.currentIndex + 1}</span><span>{game.rules.automatic_auctioneer ? `BID CLOSES IN ${secondsLeft}s` : 'MANUAL LOT CONTROL'}</span><span>{game.queue.length - game.currentIndex - 1} players after this</span></div>
