@@ -130,7 +130,6 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
   }, [game.currentPlayer?.id, currentBid, game.status, game.rules.automatic_auctioneer, game.rules.bid_timer_seconds]);
   useEffect(() => {
     if (game.status !== 'live' || !currentPlayer || !game.rules.automatic_auctioneer) return;
-    if (highestTeam?.code === humanTeam?.code) return;
     const timer = setTimeout(() => onBotRound(), 1200);
     return () => clearTimeout(timer);
   }, [game.status, currentPlayer?.id, currentBid, highestTeam?.code, humanTeam?.code, game.rules.automatic_auctioneer]);
