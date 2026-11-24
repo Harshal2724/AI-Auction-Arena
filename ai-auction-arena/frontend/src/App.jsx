@@ -12,6 +12,14 @@ const FRANCHISES = [
   { short_name:'GT', name:'Gujarat Titans', color:'#174b70' }, { short_name:'LSG', name:'Lucknow Super Giants', color:'#00a6a6' }
 ];
 const DEMO_PLAYERS = IPL2025_AUCTION_PLAYERS.map(p=>({...p}));
+const LEGACY_FRANCHISES = {
+  KXIP:{short_name:'KXIP',name:'Kings XI Punjab',color:'#d32f2f'},
+  DD:{short_name:'DD',name:'Delhi Daredevils',color:'#1565c0'},
+  RPS:{short_name:'RPS',name:'Rising Pune Supergiant',color:'#673ab7'},
+  GL:{short_name:'GL',name:'Gujarat Lions',color:'#f36c21'}
+};
+const seasonFranchiseList = year => Object.keys(HISTORICAL_RETENTIONS[year]?.teams||{}).map(code=>LEGACY_FRANCHISES[code]||FRANCHISES.find(t=>t.short_name===code)).filter(Boolean);
+
 const IPL2025_RETENTIONS = {
   CSK:{purse:55,players:[['Ruturaj Gaikwad',18],['Matheesha Pathirana',13,'Sri Lanka'],['Shivam Dube',12],['Ravindra Jadeja',18],['MS Dhoni',4]]},
   DC:{purse:73,players:[['Axar Patel',16.5],['Kuldeep Yadav',13.25],['Tristan Stubbs',10,'South Africa'],['Abhishek Porel',4]]},
@@ -85,7 +93,7 @@ export default function App() {
     const perf=performance2025[key];if(perf){if(perf.runs)value*=Math.min(1.28,Math.max(0.9,0.92+perf.runs/2200+(perf.sr>170?0.04:0)));if(perf.wickets)value*=Math.min(1.3,Math.max(0.92,0.9+perf.wickets/150+(perf.economy<=8?0.05:0)));}
     let performanceFactor=0.88;if(perf){if(perf.runs){performanceFactor=Math.min(1.22,Math.max(0.78,0.78+perf.runs/2600+(perf.avg>=45?0.06:0)+(perf.sr>=170?0.04:0)));}else if(perf.wickets){performanceFactor=Math.min(1.24,Math.max(0.78,0.82+perf.wickets/180+(perf.economy<=8?0.05:0)));}}const marketAdjustment=0.82;value*=marketAdjustment*performanceFactor;return Math.max(base,Number(value.toFixed(2)));
   }
-  function botMax(team,p,g){const role=normalRole(p.role);const need=team.needs?.[role]||0;const minSlotsLeft=Math.max(0,Number(g.rules.min_squad_size)-team.squad.length);const overseas=p.country!=='India';const overseasLeft=Number(g.rules.max_overseas_players)-team.overseas;const slotsLeft=Number(g.rules.max_squad_size)-team.squad.length;if(slotsLeft<=0||(overseas&&overseasLeft<=0))return 0;
+  function botMax(team,p,g){const role=normalRole(p.role);const need=team.needs?.[role]||0;const minSlotsLeft=Math.max(0,Number(g.rules.min_squad_size)-team.squad.length);const overseas=isOverseas(p);const overseasLeft=Number(g.rules.max_overseas_players)-team.overseas;const slotsLeft=Number(g.rules.max_squad_size)-team.squad.length;if(slotsLeft<=0||(overseas&&overseasLeft<=0))return 0;
     const reserve=minimumFutureReserve(team,p,g);const spendable=Math.max(0,team.purse-reserve);const market=playerMarketValue(p);const roleNeed=need>=5?1.2:need>=3?1.1:need>=1?1:0.72;const overseasTarget=Math.min(7,Number(g.rules.max_overseas_players));const overseasDeficit=Math.max(0,overseasTarget-team.overseas);const overseasPressure=overseas&&overseasDeficit>0?1.18:(!overseas&&overseasDeficit>0?0.78:1);const personality=1;const cap=market*roleNeed*overseasPressure*personality;return Number(Math.min(spendable,team.purse,cap).toFixed(2));}
 
   function nextLot(g){let idx=g.currentIndex+1;while(idx<g.queue.length){const p=g.players.find(x=>x.id===g.queue[idx]);if(p&&p.status==='Available')break;idx++;}g.currentIndex=idx;g.currentBid=0;g.highestTeam=null;g.currentPlayer=g.players.find(x=>x.id===g.queue[idx])||null;if(!g.currentPlayer){g.status='completed';logEvent(g,'Auction completed. All available players have been processed.');}else{g.status='live';logEvent(g,`LOT ${idx+1}: ${g.currentPlayer.name} enters at ${money(g.currentPlayer.base_price)}.`);}return g;}
@@ -105,7 +113,7 @@ export default function App() {
   }
   function runBots(){if(!game||!currentPlayer)return;const g=botResponseFor(structuredClone(game));saveGame(g);}
   function allocateSkippedPlayer(g,p){
-    const candidates=g.teams.filter(t=>t.control==='bot'&&availableFor(t,p,g)&&t.squad.length<Number(g.rules.max_squad_size)&&(!(p.country!=='India')||t.overseas<Number(g.rules.max_overseas_players))).map(t=>({team:t,need:t.needs?.[normalRole(p.role)]||0,ceiling:botMax(t,p,g)})).filter(x=>x.need>0&&x.ceiling>=p.base_price);
+    const candidates=g.teams.filter(t=>t.control==='bot'&&availableFor(t,p,g)&&t.squad.length<Number(g.rules.max_squad_size)&&(!(isOverseas(p))||t.overseas<Number(g.rules.max_overseas_players))).map(t=>({team:t,need:t.needs?.[normalRole(p.role)]||0,ceiling:botMax(t,p,g)})).filter(x=>x.need>0&&x.ceiling>=p.base_price);
     if(!candidates.length){p.status='Skipped';logEvent(g,p.name+' skipped by the human team; no AI franchise had sufficient need and budget, so the player remains unsold.');return g;}
     candidates.sort((a,b)=>b.need-a.need||b.ceiling-a.ceiling||b.team.purse-a.team.purse);
     const chosen=candidates[0];
@@ -113,14 +121,14 @@ export default function App() {
     const winner=chosen.team;
     winner.purse=Number((winner.purse-price).toFixed(2));
     winner.squad.push({...p,status:'Sold',sold_price:price,sold_to:winner.code,allocatedAfterSkip:true});
-    if(p.country!=='India')winner.overseas++;
+    if(isOverseas(p))winner.overseas++;
     p.status='Sold';p.sold_to=winner.code;p.sold_price=price;p.allocatedAfterSkip=true;
     winner.needs=analyseNeeds(winner,g.rules);
     g.results.push({player:p.name,team:winner.code,price,allocatedAfterSkip:true});
     logEvent(g,p.name+' passed by the human team and allocated to '+winner.code+' for '+money(price)+' based on player value, squad need and available purse.');
     return g;
   }
-  function sellCurrent(){if(!game||!currentPlayer)return;let g=structuredClone(game);if(g.highestTeam){const winner=g.teams.find(t=>t.code===g.highestTeam);const p=g.players.find(x=>x.id===g.currentPlayer.id);winner.purse=Number((winner.purse-g.currentBid).toFixed(2));winner.squad.push({...p,sold_price:g.currentBid});if(p.country!=='India')winner.overseas++;p.status='Sold';p.sold_to=winner.code;p.sold_price=g.currentBid;g.results.push({player:p.name,team:winner.code,price:g.currentBid});winner.needs=analyseNeeds(winner,g.rules);logEvent(g,`${p.name} SOLD to ${winner.code} for ${money(g.currentBid)}.`);}else{const p=g.players.find(x=>x.id===g.currentPlayer.id);p.status='Unsold';logEvent(g,`${p.name} goes UNSOLD.`);}g=nextLot(g);saveGame(g);}
+  function sellCurrent(){if(!game||!currentPlayer)return;let g=structuredClone(game);if(g.highestTeam){const winner=g.teams.find(t=>t.code===g.highestTeam);const p=g.players.find(x=>x.id===g.currentPlayer.id);winner.purse=Number((winner.purse-g.currentBid).toFixed(2));winner.squad.push({...p,sold_price:g.currentBid});if(isOverseas(p))winner.overseas++;p.status='Sold';p.sold_to=winner.code;p.sold_price=g.currentBid;g.results.push({player:p.name,team:winner.code,price:g.currentBid});winner.needs=analyseNeeds(winner,g.rules);logEvent(g,`${p.name} SOLD to ${winner.code} for ${money(g.currentBid)}.`);}else{const p=g.players.find(x=>x.id===g.currentPlayer.id);p.status='Unsold';logEvent(g,`${p.name} goes UNSOLD.`);}g=nextLot(g);saveGame(g);}
   function endAuctionAndCompleteSquads(){
     if(!game||!humanTeam||humanTeam.squad.length<Number(game.rules.min_squad_size)||humanTeam.squad.length>Number(game.rules.max_squad_size))return;
     const g=structuredClone(game);const min=Number(g.rules.min_squad_size);const max=Number(g.rules.max_squad_size);
@@ -141,7 +149,7 @@ export default function App() {
         const reserve=Math.max(slotsAfter,overseasAfter)*0.3;
         let pool=g.players.filter(p=>p.status==='Available'&&availableFor(team,p,g)&&team.purse-(p.base_price||0)>=reserve);
         if(overseasNeeded){
-          const overseasPool=pool.filter(p=>p.country!=='India');
+          const overseasPool=pool.filter(p=>isOverseas(p));
           if(overseasPool.length)pool=overseasPool;
         }
         if(!pool.length)break;
@@ -157,7 +165,7 @@ export default function App() {
         if(price+1e-6<base)break;
         team.purse=Number((team.purse-price).toFixed(2));
         team.squad.push({...p,status:'Sold',sold_price:price,sold_to:team.code,autoFilled:true});
-        if(p.country!=='India')team.overseas++;
+        if(isOverseas(p))team.overseas++;
         p.status='Sold';p.sold_to=team.code;p.sold_price=price;p.autoFilled=true;
         g.results.push({player:p.name,team:team.code,price,autoFilled:true});
         team.needs=analyseNeeds(team,g.rules);
@@ -300,7 +308,7 @@ function AuctionRoom({game,currentPlayer,currentBid,highestTeam,humanTeam,bidAmo
           <div className="squad-card" key={t.code}>
             <div className="squad-head"><b>{t.code}</b><span>{money(t.purse)}</span></div>
             <small>{t.squad.length} players · {t.overseas} overseas · {t.control === 'bot' ? 'AI' : 'Human'}</small>
-            <div className="squad-names">{t.squad.length ? t.squad.map(p => <span key={p.id}>{p.name}{p.country !== 'India' && <Plane size={12} title='Overseas player'/>}<i>{p.retained ? 'Retained' : money(p.sold_price)}</i></span>) : <em>No purchases yet</em>}</div>
+            <div className="squad-names">{t.squad.length ? t.squad.map(p => <span key={p.id}>{p.name}{isOverseas(p) && <Plane size={12} title='Overseas player'/>}<i>{p.retained ? 'Retained' : money(p.sold_price)}</i></span>) : <em>No purchases yet</em>}</div>
             {t.control === 'bot' && <div className="need-chips">{Object.entries(t.needs || {}).filter(([,v]) => v > 0).slice(0,3).map(([r,v]) => <i key={r}>{r}: {v}</i>)}</div>}
           </div>
         ))}</div>}
