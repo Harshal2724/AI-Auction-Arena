@@ -972,6 +972,16 @@
         "Kane Williamson",
         "Abdul Samad",
         "Umran Malik"
+      ],
+      "GT": [
+        "Hardik Pandya",
+        "Rashid Khan",
+        "Shubman Gill"
+      ],
+      "LSG": [
+        "KL Rahul",
+        "Marcus Stoinis",
+        "Ravi Bishnoi"
       ]
     },
     "remainingPurse": {
@@ -982,7 +992,9 @@
       "PBKS": 72,
       "RR": 62,
       "RCB": 57,
-      "SRH": 68
+      "SRH": 68,
+      "GT": 52,
+      "LSG": 59.8
     }
   },
   "2023": {
