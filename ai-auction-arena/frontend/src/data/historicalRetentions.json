@@ -646,6 +646,16 @@
         "Basil Thampi",
         "Deepak Hooda"
       ]
+    },
+    "remainingPurse": {
+      "CSK": 8.4,
+      "DD": 25.5,
+      "KXIP": 36.2,
+      "KKR": 15.2,
+      "MI": 11.15,
+      "RR": 20.95,
+      "RCB": 18.15,
+      "SRH": 9.7
     }
   },
   "2020": {
@@ -763,6 +773,16 @@
         "Abhishek Sharma",
         "Mohammad Nabi"
       ]
+    },
+    "remainingPurse": {
+      "CSK": 14.6,
+      "DC": 27.85,
+      "KXIP": 42.7,
+      "KKR": 35.65,
+      "MI": 13.05,
+      "RR": 28.9,
+      "RCB": 27.9,
+      "SRH": 17
     }
   },
   "2021": {
@@ -924,6 +944,16 @@
         "Chris Jordan",
         "Prabhsimran Singh"
       ]
+    },
+    "remainingPurse": {
+      "CSK": 22.9,
+      "DC": 12.9018,
+      "KXIP": 53.2,
+      "KKR": 10.75,
+      "MI": 15.35,
+      "RR": 34.85,
+      "RCB": 35.9,
+      "SRH": 10.75
     }
   },
   "2022": {
