@@ -33,7 +33,7 @@ const IPL2025_RETENTIONS = {
   SRH:{purse:45,players:[['Pat Cummins',18,'Australia'],['Abhishek Sharma',14],['Nitish Kumar Reddy',6],['Heinrich Klaasen',23,'South Africa'],['Travis Head',14,'Australia']]}
 };
 const DEFAULTS = { name:'IPL 2025 Mega Auction', auction_type:'mega', total_purse:120, max_squad_size:25, min_squad_size:18, max_overseas_players:8, bid_timer_seconds:10, automatic_auctioneer:true, allow_pause_resume:true, difficulty:'realistic', personality:'balanced' };
-const isOverseas = p => Boolean(p && p.country && isOverseas(p) && p.country !== 'Unknown');
+const isOverseas = p => Boolean(p && p.country && p.country !== 'India' && p.country !== 'Unknown');
 const money = n => `₹${Number(n || 0).toFixed(2)} Cr`;
 const readStore = () => { try { return JSON.parse(localStorage.getItem('auction-arena-v1') || '[]'); } catch { return []; } };
 const writeStore = games => localStorage.setItem('auction-arena-v1', JSON.stringify(games));
