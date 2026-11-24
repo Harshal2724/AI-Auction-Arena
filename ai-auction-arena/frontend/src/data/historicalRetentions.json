@@ -269,6 +269,16 @@
         "Dwayne Bravo",
         "James Faulkner"
       ]
+    },
+    "remainingPurse": {
+      "DD": 37.15,
+      "KXIP": 23,
+      "KKR": 17.95,
+      "MI": 14.405,
+      "RCB": 21.625,
+      "SRH": 30.15,
+      "RPS": 27,
+      "GL": 27
     }
   },
   "2017": {
@@ -431,6 +441,16 @@
         "Shadab Jakati",
         "Jaydev Shah"
       ]
+    },
+    "remainingPurse": {
+      "DD": 21.5,
+      "KXIP": 23.35,
+      "KKR": 19.75,
+      "MI": 11.555,
+      "RCB": 12.825,
+      "SRH": 20.9,
+      "RPS": 19.1,
+      "GL": 14.35
     }
   },
   "2018": {
@@ -471,6 +491,16 @@
         "David Warner",
         "Bhuvneshwar Kumar"
       ]
+    },
+    "remainingPurse": {
+      "CSK": 47,
+      "DD": 47,
+      "KXIP": 67.5,
+      "KKR": 59,
+      "MI": 47,
+      "RR": 67.5,
+      "RCB": 49,
+      "SRH": 59
     }
   },
   "2019": {
@@ -943,6 +973,16 @@
         "Abdul Samad",
         "Umran Malik"
       ]
+    },
+    "remainingPurse": {
+      "CSK": 48,
+      "DC": 47.5,
+      "KKR": 48,
+      "MI": 48,
+      "PBKS": 72,
+      "RR": 62,
+      "RCB": 57,
+      "SRH": 68
     }
   },
   "2023": {
@@ -1403,6 +1443,18 @@
         "Heinrich Klaasen",
         "Travis Head"
       ]
+    },
+    "remainingPurse": {
+      "CSK": 55,
+      "DC": 73,
+      "GT": 69,
+      "KKR": 51,
+      "LSG": 69,
+      "MI": 45,
+      "PBKS": 110.5,
+      "RR": 41,
+      "RCB": 83,
+      "SRH": 45
     }
   },
   "2026": {
@@ -1604,6 +1656,18 @@
         "Kamindu Mendis",
         "Zeeshan Ansari"
       ]
+    },
+    "remainingPurse": {
+      "CSK": 43.4,
+      "DC": 21.8,
+      "GT": 12.9,
+      "KKR": 64.3,
+      "LSG": 22.95,
+      "MI": 2.75,
+      "PBKS": 11.5,
+      "RCB": 16.4,
+      "RR": 16.05,
+      "SRH": 25.5
     }
   }
 }
