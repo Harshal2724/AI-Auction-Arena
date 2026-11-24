@@ -810,24 +810,6 @@
         "Pravin Dubey",
         "Chris Woakes"
       ],
-      "PBKS": [
-        "KL Rahul",
-        "Arshdeep Singh",
-        "Chris Gayle",
-        "Darshan Nalkande",
-        "Harpreet Brar",
-        "Mandeep Singh",
-        "Mayank Agarwal",
-        "Mohammed Shami",
-        "Murugan Ashwin",
-        "Nicholas Pooran",
-        "Sarfaraz Khan",
-        "Deepak Hooda",
-        "Ishan Porel",
-        "Ravi Bishnoi",
-        "Chris Jordan",
-        "Prabhsimran Singh"
-      ],
       "KKR": [
         "Eoin Morgan",
         "Andre Russell",
@@ -923,6 +905,24 @@
         "Mitchell Marsh",
         "Jason Holder",
         "Abdul Samad"
+      ],
+      "KXIP": [
+        "KL Rahul",
+        "Arshdeep Singh",
+        "Chris Gayle",
+        "Darshan Nalkande",
+        "Harpreet Brar",
+        "Mandeep Singh",
+        "Mayank Agarwal",
+        "Mohammed Shami",
+        "Murugan Ashwin",
+        "Nicholas Pooran",
+        "Sarfaraz Khan",
+        "Deepak Hooda",
+        "Ishan Porel",
+        "Ravi Bishnoi",
+        "Chris Jordan",
+        "Prabhsimran Singh"
       ]
     }
   },
