@@ -40,77 +40,112 @@ export function simulateIplSeason(game){const teams=game.teams.map(t=>({...t,squ
 
 function teamRoleNeeds(team){const sq=team?.squad||[];return {bat:sq.filter(p=>['bat','wk','ar','flex'].includes(roleOf(p))).length,bowl:sq.filter(isBowler).length,overseas:sq.filter(p=>Boolean(p.country)&&!['india','indian','unknown'].includes(String(p.country).toLowerCase())).length};}
 function tradeValue(p){return playerQuality(p);}
+
 function TradeWindow({game,career,onSave}){
  const userCode=game.humanTeam||game.teams.find(t=>t.control==='human')?.code||game.teams[0]?.code;
  const teams=career.teams.map(t=>({...t,squad:[...(t.squad||[])]}));
  const userTeam=teams.find(t=>t.code===userCode);
  const [target,setTarget]=useState(teams.find(t=>t.code!==userCode)?.code||'');
- const [give,setGive]=useState('');const [get,setGet]=useState('');const [cash,setCash]=useState('0');const [err,setErr]=useState('');
+ const [give,setGive]=useState('');const [get,setGet]=useState('');const [cash,setCash]=useState('0');
+ const [requestMode,setRequestMode]=useState('player');const [counterCash,setCounterCash]=useState('');const [counterPlayer,setCounterPlayer]=useState('');
+ const [err,setErr]=useState('');
  const saved=game.tradeWindow||{status:'not_started',offers:[]};
- const endAt=saved.startedAt?new Date(saved.startedAt).getTime()+10*86400000:0;
+ const endAt=saved.startedAt?new Date(saved.startedAt).getTime()+10*60000:0;
  const active=saved.status==='open'&&Date.now()<endAt;
- const daysLeft=saved.startedAt?Math.max(0,Math.ceil((endAt-Date.now())/86400000)):10;
+ const secondsLeft=saved.startedAt?Math.max(0,Math.ceil((endAt-Date.now())/1000)):600;
  const teamName=code=>teams.find(t=>t.code===code)?.name||code;
  const save=(nextTeams,window)=>onSave({...game,teams:nextTeams,career:{...career,teams:nextTeams},tradeWindow:window});
  const findPlayer=(team,id)=>team?.squad?.find(p=>String(p.id||p.name)===String(id));
- const playerOk=(player,destination)=>{if(!player)return true;const origin=teams.find(t=>t.squad.some(p=>p.name===player.name));return !origin||teamStrength(destination)>=teamStrength(origin)-0.22||tradeValue(player)<0.72;};
+ const completed=(saved.offers||[]).filter(o=>o.status==='completed');
+ const playerMovements=code=>completed.reduce((n,o)=>n+((o.from===code&&o.offeredPlayer)?1:0)+((o.to===code&&o.requestedPlayer)?1:0),0);
+ const canMove=(code,count=1)=>playerMovements(code)+count<=3;
+ const isCore=(team,p)=>{if(!team||!p)return false;const sorted=[...(team.squad||[])].sort((a,b)=>tradeValue(b)-tradeValue(a));return sorted.slice(0,5).some(x=>x.name===p.name);};
+ const teamAccepts=(offer)=>{
+  const from=teams.find(t=>t.code===offer.from),to=teams.find(t=>t.code===offer.to);
+  if(!from||!to||Number(offer.cashCr||0)>Number(from.purse||0))return false;
+  const offered=findPlayer(from,offer.offeredPlayer),requested=findPlayer(to,offer.requestedPlayer);
+  if(offer.offeredPlayer&&!offered)return false;
+  if(offer.requestedPlayer&&!requested)return false;
+  if((offered||requested)&&(!canMove(from.code,offered?1:0)||!canMove(to.code,requested?1:0)))return false;
+  if(requested&&isCore(to,requested)){
+   if(!offered||tradeValue(offered)<tradeValue(requested)*0.9)return false;
+  }
+  if(offered&&isCore(from,offered)){
+   if(!requested||tradeValue(requested)<tradeValue(offered)*0.9)return false;
+  }
+  const value=(offered?tradeValue(offered):0)+Number(offer.cashCr||0)/20;
+  const wanted=requested?tradeValue(requested):0;
+  const needs=teamRoleNeeds(from);
+  const needBonus=offered&&((isBowler(offered)&&needs.bowl<5)||(!isBowler(offered)&&needs.bat<7))?0.12:0;
+  return offer.cashOnly?Number(offer.cashCr||0)>=0.25:(value+needBonus>=wanted*0.88);
+ };
+ const playerAccepts=(player,destination)=>{
+  if(!player)return true;
+  const origin=teams.find(t=>t.squad.some(p=>p.name===player.name));
+  if(!origin)return true;
+  return teamStrength(destination)>=teamStrength(origin)-0.2||tradeValue(player)<0.72;
+ };
  const execute=(offer)=>{
   const next=teams.map(t=>({...t,squad:[...(t.squad||[])]}));
   const from=next.find(t=>t.code===offer.from),to=next.find(t=>t.code===offer.to);
   const offered=findPlayer(from,offer.offeredPlayer),requested=findPlayer(to,offer.requestedPlayer);
   if(offered){from.squad=from.squad.filter(p=>p.name!==offered.name);to.squad.push({...offered,status:'Traded',tradedFrom:from.code});}
   if(requested){to.squad=to.squad.filter(p=>p.name!==requested.name);from.squad.push({...requested,status:'Traded',tradedFrom:to.code});}
-  const amount=Number(offer.cashCr||0);from.purse=Number((Number(from.purse||0)-amount).toFixed(2));to.purse=Number((Number(to.purse||0)+amount).toFixed(2));
+  const amount=Number(offer.cashCr||0);
+  from.purse=Number((Number(from.purse||0)-amount).toFixed(2));to.purse=Number((Number(to.purse||0)+amount).toFixed(2));
   return next;
  };
- const start=()=>{
-  const rivals=teams.filter(t=>t.code!==userCode);const offers=[];
-  for(let i=0;i<Math.min(2,rivals.length);i++){
-   const rival=rivals[(hashSeed(String(game.id)+'ai'+i)%rivals.length)];
-   const mine=[...userTeam.squad].sort((a,b)=>tradeValue(a)-tradeValue(b))[i+1];
-   const theirs=[...rival.squad].sort((a,b)=>tradeValue(b)-tradeValue(a))[i+2];
-   if(mine&&theirs)offers.push({id:'ai-'+i+'-'+Date.now(),from:rival.code,to:userCode,offeredPlayer:theirs.id||theirs.name,requestedPlayer:mine.id||mine.name,cashCr:0,initiatedByAI:true,status:'awaiting_user',summary:theirs.name+' for '+mine.name});
-  }
-  save(teams,{status:'open',startedAt:new Date().toISOString(),offers});
+ const finishPlayerStage=(offer)=>{
+  const from=teams.find(t=>t.code===offer.from),to=teams.find(t=>t.code===offer.to);
+  const a=findPlayer(from,offer.offeredPlayer),b=findPlayer(to,offer.requestedPlayer);
+  if(!playerAccepts(a,to)||!playerAccepts(b,from))return {status:'player_rejected',playerDecision:'rejected'};
+  return {status:'completed',playerDecision:'accepted'};
  };
+ const start=()=>save(teams,{status:'open',startedAt:new Date().toISOString(),offers:[]});
+ const end=()=>save(teams,{...saved,status:'closed',closedAt:new Date().toISOString()});
  const submit=()=>{
   setErr('');if(!active)return setErr('The trading window is closed.');
   const other=teams.find(t=>t.code===target),offered=findPlayer(userTeam,give),requested=findPlayer(other,get),amount=Number(cash||0);
-  if(!offered&&!amount)return setErr('Choose a player to offer or enter a cash amount.');
-  if(!requested)return setErr('Choose the player you want from the other franchise.');
+  if(!offered&&!amount)return setErr('Choose a player or enter a cash offer.');
+  if(requestMode==='player'&&!requested)return setErr('Choose a player you want.');
+  if(requestMode==='cash'&&requested)return setErr('Choose cash-only request mode.');
   if(amount<0||amount>Number(userTeam.purse||0))return setErr('Cash offer exceeds your available purse.');
-  const offer={id:'trade-'+Date.now(),from:userCode,to:target,offeredPlayer:offered?(offered.id||offered.name):null,requestedPlayer:requested.id||requested.name,cashCr:amount,summary:(offered?.name||'Cash')+' + ₹'+amount.toFixed(2)+' Cr for '+requested.name,initiatedByAI:false};
-  const value=(offered?tradeValue(offered):0)+amount/20;
-  const targetValue=tradeValue(requested);
-  const need=isBowler(offered||{})?teamRoleNeeds(other).bowl<5:teamRoleNeeds(other).bat<7;
-  if(value+(need?0.1:0)<targetValue*0.88){save(teams,{...saved,offers:[...(saved.offers||[]),{...offer,status:'rejected',teamDecision:'rejected'}]});return;}
-  if(!playerOk(offered,other)||!playerOk(requested,userTeam)){save(teams,{...saved,offers:[...(saved.offers||[]),{...offer,status:'player_rejected',teamDecision:'accepted'}]});return;}
-  const next=execute(offer);
-  save(next,{...saved,offers:[...(saved.offers||[]),{...offer,status:'completed',teamDecision:'accepted',playerDecision:'accepted'}]});
+  const offer={id:'trade-'+Date.now(),from:userCode,to:target,offeredPlayer:offered?(offered.id||offered.name):null,requestedPlayer:requestMode==='player'?(requested.id||requested.name):null,cashCr:amount,cashOnly:requestMode==='cash',summary:(offered?.name||'Cash only')+' + ₹'+amount.toFixed(2)+' Cr',stage:'team',status:'submitted',createdAt:new Date().toISOString()};
+  if(!teamAccepts(offer)){save(teams,{...saved,offers:[...(saved.offers||[]),{...offer,status:'team_rejected',teamDecision:'rejected'}]});return;}
+  const playerStage=finishPlayerStage(offer);
+  const nextOffers=[...(saved.offers||[]),{...offer,status:playerStage.status,teamDecision:'accepted',...playerStage}];
+  if(playerStage.status==='completed'){const next=execute(offer);save(next,{...saved,offers:nextOffers});}
+  else save(teams,{...saved,offers:nextOffers});
   setGive('');setGet('');setCash('0');
  };
- const decide=(offer,accept)=>{
-  let offers=(saved.offers||[]).map(o=>o.id===offer.id?{...o,status:accept?'accepted_by_user':'rejected_by_user',teamDecision:accept?'accepted':'rejected'}:o);
-  if(!accept){save(teams,{...saved,offers});return;}
+ const counter=(offer)=>{
   const from=teams.find(t=>t.code===offer.from),to=teams.find(t=>t.code===offer.to);
-  const incoming=findPlayer(from,offer.offeredPlayer),outgoing=findPlayer(to,offer.requestedPlayer);
-  if(!playerOk(incoming,to)||!playerOk(outgoing,from)){offers=offers.map(o=>o.id===offer.id?{...o,status:'player_rejected',playerDecision:'rejected'}:o);save(teams,{...saved,offers});return;}
-  const next=execute(offer);offers=offers.map(o=>o.id===offer.id?{...o,status:'completed',playerDecision:'accepted'}:o);save(next,{...saved,offers});
+  const extra=Number(counterCash||0);const player=findPlayer(to,counterPlayer);
+  if(extra<0||extra>Number(from.purse||0))return setErr('Counter cash exceeds the offering team purse.');
+  const revised={...offer,id:offer.id+'-counter-'+Date.now(),cashCr:Number(offer.cashCr||0)+extra,requestedPlayer:player?(player.id||player.name):offer.requestedPlayer,counteredFrom:offer.id,summary:'Counter: '+(offer.offeredPlayer?findPlayer(from,offer.offeredPlayer)?.name:'Cash')+' + ₹'+(Number(offer.cashCr||0)+extra).toFixed(2)+' Cr'};
+  if(!teamAccepts(revised)){save(teams,{...saved,offers:[...(saved.offers||[]),{...revised,status:'team_rejected',teamDecision:'rejected'}]});return;}
+  const stage=finishPlayerStage(revised);
+  const offers=[...(saved.offers||[]),{...offer,status:'countered',teamDecision:'countered'}, {...revised,status:stage.status,teamDecision:'accepted',...stage}];
+  if(stage.status==='completed')save(execute(revised),{...saved,offers});else save(teams,{...saved,offers});
+  setCounterCash('');setCounterPlayer('');setErr('');
  };
- const pending=(saved.offers||[]).filter(o=>o.status==='awaiting_user');
- const nameFor=(team,key)=>findPlayer(team,key)?.name||'Cash only';
+ const pending=(saved.offers||[]).filter(o=>o.to===userCode&&o.status==='submitted');
+ const fmt=(team,key)=>findPlayer(team,key)?.name||'Cash only';
+ const mins=Math.floor(secondsLeft/60),secs=secondsLeft%60;
  return <section className="panel" style={{padding:22,marginTop:18}}>
   <div className="eyebrow">POST-SEASON · FRANCHISE MANAGEMENT</div><h2><Handshake size={20}/> Trading window</h2>
-  {saved.status==='not_started'?<><p>Open a 10-day window to negotiate player swaps and cash-plus-player trades. A trade completes only when both franchises and all affected players agree.</p><button className="primary-btn" onClick={start}><Clock size={16}/> Open 10-day trading window</button></>:<>
-   <div className="metric"><Clock/><div><strong>{active?daysLeft+' days remaining':'Window closed'}</strong><span>10-day franchise trading period</span></div></div>
-   {pending.length>0&&<><h3>Offers from AI franchises</h3>{pending.map(o=><div className="squad-card" key={o.id}><b>{teamName(o.from)} offers</b><p>{nameFor(teams.find(t=>t.code===o.from),o.offeredPlayer)} for {nameFor(userTeam,o.requestedPlayer)}</p><button className="primary-btn" onClick={()=>decide(o,true)}><Check size={14}/> Accept</button> <button className="secondary-btn" onClick={()=>decide(o,false)}><X size={14}/> Reject</button></div>)}</>}
+  {saved.status==='not_started'?<><p>Trading lasts 10 minutes. Make player swaps, cash-only offers or cash-plus-player deals. Teams evaluate first; players decide only after their franchises accept.</p><button className="primary-btn" onClick={start}><Clock size={16}/> Start 10-minute trading window</button></>:<>
+   <div className="metric"><Clock/><div><strong>{active?mins+':'+String(secs).padStart(2,'0')+' remaining':'Window closed'}</strong><span>Maximum 3 player movements per franchise · cash deals do not count</span></div></div>
+   {active&&<button className="secondary-btn" onClick={end}>End trading window</button>}
+   {pending.length>0&&<><h3>Offers awaiting your franchise decision</h3>{pending.map(o=><div className="squad-card" key={o.id}><b>{teamName(o.from)} offer</b><p>{fmt(teams.find(t=>t.code===o.from),o.offeredPlayer)} + ₹{Number(o.cashCr||0).toFixed(2)} Cr for {o.requestedPlayer?fmt(userTeam,o.requestedPlayer):'cash'}</p><button className="primary-btn" onClick={()=>{const revised={...o,to:userCode};const stage=finishPlayerStage(revised);const offers=saved.offers.map(x=>x.id===o.id?{...x,status:stage.status,teamDecision:'accepted',...stage}:x);if(stage.status==='completed')save(execute(revised),{...saved,offers});else save(teams,{...saved,offers});}}>Accept</button> <button className="secondary-btn" onClick={()=>save(teams,{...saved,offers:saved.offers.map(x=>x.id===o.id?{...x,status:'team_rejected',teamDecision:'rejected'}:x)})}>Reject</button></div>)}</>}
    {active&&<><h3>Make a trade offer</h3><div className="field-grid">
     <label className="field-label">Franchise<select value={target} onChange={e=>{setTarget(e.target.value);setGet('');}}>{teams.filter(t=>t.code!==userCode).map(t=><option key={t.code} value={t.code}>{t.name}</option>)}</select></label>
-    <label className="field-label">Your player<select value={give} onChange={e=>setGive(e.target.value)}><option value="">No player (cash offer)</option>{userTeam.squad.map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}</option>)}</select></label>
-    <label className="field-label">Player requested<select value={get} onChange={e=>setGet(e.target.value)}><option value="">Choose player</option>{(teams.find(t=>t.code===target)?.squad||[]).map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}</option>)}</select></label>
-    <label className="field-label">Cash added (₹ Cr)<input type="number" min="0" step="0.05" max={userTeam.purse||0} value={cash} onChange={e=>setCash(e.target.value)}/><small>Available purse: ₹{Number(userTeam.purse||0).toFixed(2)} Cr</small></label>
-   </div>{err&&<p className="error">{err}</p>}<button className="primary-btn" onClick={submit}><ArrowLeftRight size={16}/> Submit offer</button></>}
-   <h3>Trade history</h3>{(saved.offers||[]).length===0?<p>No offers yet.</p>:(saved.offers||[]).map(o=><div className="squad-card" key={o.id}><b>{teamName(o.from)} → {teamName(o.to)}</b><p>{o.summary}</p><small>Status: {String(o.status).replaceAll('_',' ')}</small></div>)}
+    <label className="field-label">Your player<select value={give} onChange={e=>setGive(e.target.value)}><option value="">Cash only</option>{userTeam.squad.map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}</option>)}</select></label>
+    <label className="field-label">Deal type<select value={requestMode} onChange={e=>setRequestMode(e.target.value)}><option value="player">Request a player</option><option value="cash">Request cash only</option></select></label>
+    {requestMode==='player'&&<label className="field-label">Player requested<select value={get} onChange={e=>setGet(e.target.value)}><option value="">Choose player</option>{(teams.find(t=>t.code===target)?.squad||[]).map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}</option>)}</select></label>}
+    <label className="field-label">Cash added by you (₹ Cr)<input type="number" min="0" step="0.05" max={userTeam.purse||0} value={cash} onChange={e=>setCash(e.target.value)}/><small>Available purse: ₹{Number(userTeam.purse||0).toFixed(2)} Cr</small></label>
+   </div>{err&&<p className="error">{err}</p>}<button className="primary-btn" onClick={submit}>Submit offer</button></>}
+   <h3>Trade history</h3>{(saved.offers||[]).map(o=><div className="squad-card" key={o.id}><b>{teamName(o.from)} → {teamName(o.to)}</b><p>{o.summary}</p><small>Status: {String(o.status).replaceAll('_',' ')} · {o.teamDecision||'pending team decision'} {o.playerDecision?'· Player '+o.playerDecision:''}</small></div>)}
   </>}
  </section>;
 }
