@@ -59,6 +59,9 @@ function TradeWindow({game,career,onSave}){
  const save=(nextTeams,window)=>onSave({...game,teams:nextTeams,career:{...career,teams:nextTeams},tradeWindow:window});
  const findPlayer=(team,id)=>team?.squad?.find(p=>String(p.id||p.name)===String(id));
  const completed=(saved.offers||[]).filter(o=>o.status==='completed');
+ const reservedKeys=new Set((saved.offers||[]).filter(o=>['submitted','awaiting_player','completed'].includes(o.status)).flatMap(o=>[[o.from,o.offeredPlayer],[o.to,o.requestedPlayer]].filter(x=>x[1]).map(x=>x[0]+'|'+String(x[1]))));
+ const isReserved=(teamCode,player)=>!!player&&reservedKeys.has(teamCode+'|'+String(player.id||player.name));
+ const isProtected=p=>!!p?.retained||String(p?.status||'').toLowerCase()==='retained';
  const playerMovements=code=>completed.reduce((n,o)=>n+((o.from===code&&o.offeredPlayer)?1:0)+((o.to===code&&o.requestedPlayer)?1:0),0);
  const canMove=(code,count=1)=>playerMovements(code)+count<=4;
  const isCore=(team,p)=>{if(!team||!p)return false;const sorted=[...(team.squad||[])].sort((a,b)=>tradeValue(b)-tradeValue(a));return sorted.slice(0,5).some(x=>x.name===p.name);};
@@ -68,6 +71,9 @@ function TradeWindow({game,career,onSave}){
   if(!from||!to||!payer||Number(o.cashCr||0)>Number(payer.purse||0))return false;
   const offered=findPlayer(from,o.offeredPlayer),requested=findPlayer(to,o.requestedPlayer);
   if(o.offeredPlayer&&!offered||o.requestedPlayer&&!requested)return false;
+  if(isProtected(offered)||isProtected(requested))return false;
+  if(offered&&isReserved(from.code,o.offeredPlayer)&&o.status!=='awaiting_player')return false;
+  if(requested&&isReserved(to.code,o.requestedPlayer)&&o.status!=='awaiting_player')return false;
   if(offered&&!canMove(from.code)||requested&&!canMove(to.code))return false;
   if(requested&&isCore(to,requested)&&(!offered||tradeValue(offered)<tradeValue(requested)*0.9))return false;
   if(offered&&isCore(from,offered)&&(!requested||tradeValue(requested)<tradeValue(offered)*0.9))return false;
@@ -81,6 +87,9 @@ function TradeWindow({game,career,onSave}){
   const next=teams.map(t=>({...t,squad:[...(t.squad||[])]}));
   const from=next.find(t=>t.code===o.from),to=next.find(t=>t.code===o.to);
   const offered=findPlayer(from,o.offeredPlayer),requested=findPlayer(to,o.requestedPlayer);
+  if((o.offeredPlayer&&!offered)||(o.requestedPlayer&&!requested)||isProtected(offered)||isProtected(requested))return null;
+  const duplicate=next.some(t=>t.squad.some(p=>(offered&&String(p.id||p.name)===String(offered.id||offered.name))||(requested&&String(p.id||p.name)===String(requested.id||requested.name))));
+  if(duplicate)return null;
   if(offered){from.squad=from.squad.filter(p=>p.name!==offered.name);to.squad.push({...offered,status:'Traded',tradedFrom:from.code});}
   if(requested){to.squad=to.squad.filter(p=>p.name!==requested.name);from.squad.push({...requested,status:'Traded',tradedFrom:to.code});}
   const payer=next.find(t=>t.code===cashPayer(o)),receiver=next.find(t=>t.code!==(cashPayer(o))&&t.code===(cashPayer(o)===from.code?to.code:from.code));
@@ -92,11 +101,16 @@ function TradeWindow({game,career,onSave}){
   const pool=teams.filter(t=>t.code!==userCode);
   const incoming=[];
   for(const t of pool.slice(0,2)){
-   const candidates=[...(t.squad||[])].filter(p=>!isCore(t,p)).sort((a,b)=>tradeValue(b)-tradeValue(a));
-   const requested=[...(userTeam.squad||[])].filter(p=>!isCore(userTeam,p)).sort((a,b)=>tradeValue(a)-tradeValue(b))[0];
+   const candidates=[...(t.squad||[])].filter(p=>!isProtected(p)&&!isCore(t,p)&&!isReserved(t.code,p)).sort((a,b)=>tradeValue(b)-tradeValue(a));
+   const requested=[...(userTeam.squad||[])].filter(p=>!isProtected(p)&&!isCore(userTeam,p)&&!isReserved(userCode,p)).sort((a,b)=>tradeValue(a)-tradeValue(b))[0];
    const offered=candidates[Math.min(candidates.length-1,1)];
-   if(offered&&requested)incoming.push({id:'ai-'+t.code+'-'+Date.now(),from:t.code,to:userCode,offeredPlayer:offered.id||offered.name,requestedPlayer:requested.id||requested.name,cashCr:0,cashFrom:t.code,cashOnly:false,summary:offered.name+' for '+requested.name,stage:'team',status:'submitted',createdAt:new Date().toISOString(),source:'AI'});
-   else if(requested)incoming.push({id:'ai-cash-'+t.code+'-'+Date.now(),from:t.code,to:userCode,offeredPlayer:null,requestedPlayer:requested.id||requested.name,cashCr:0.5,cashFrom:t.code,cashOnly:true,summary:'₹0.50 Cr cash for '+requested.name,stage:'team',status:'submitted',createdAt:new Date().toISOString(),source:'AI'});
+   if(offered&&requested){
+    incoming.push({id:'ai-'+t.code+'-'+Date.now(),from:t.code,to:userCode,offeredPlayer:offered.id||offered.name,requestedPlayer:requested.id||requested.name,cashCr:0,cashFrom:t.code,cashOnly:false,summary:offered.name+' for '+requested.name,stage:'team',status:'submitted',createdAt:new Date().toISOString(),source:'AI'});
+    reservedKeys.add(userCode+'|'+String(requested.id||requested.name));reservedKeys.add(t.code+'|'+String(offered.id||offered.name));
+   } else if(requested){
+    incoming.push({id:'ai-cash-'+t.code+'-'+Date.now(),from:t.code,to:userCode,offeredPlayer:null,requestedPlayer:requested.id||requested.name,cashCr:0.5,cashFrom:t.code,cashOnly:true,summary:'₹0.50 Cr cash for '+requested.name,stage:'team',status:'submitted',createdAt:new Date().toISOString(),source:'AI'});
+    reservedKeys.add(userCode+'|'+String(requested.id||requested.name));
+   }
   }
   save(teams,{status:'open',startedAt:new Date().toISOString(),offers:incoming});
  };
@@ -105,7 +119,9 @@ function TradeWindow({game,career,onSave}){
   setErr('');if(!active)return setErr('The trading window is closed.');
   const other=teams.find(t=>t.code===target),offered=findPlayer(userTeam,give),requested=findPlayer(other,get),amount=Number(cash||0);
   if(!offered&&!amount)return setErr('Choose a player or enter a cash offer.');
+  if(offered&&(isProtected(offered)||isReserved(userCode,give)))return setErr('This player is retained or already involved in another trade.');
   if(requestMode==='player'&&!requested)return setErr('Choose a player you want.');
+  if(requested&&(isProtected(requested)||isReserved(target,get)))return setErr('That player is retained or already involved in another trade.');
   if(amount<0||amount>Number(userTeam.purse||0))return setErr('Cash offer exceeds your available purse.');
   const o={id:'trade-'+Date.now(),from:userCode,to:target,offeredPlayer:offered?(offered.id||offered.name):null,requestedPlayer:requestMode==='player'?(requested.id||requested.name):null,cashCr:amount,cashFrom:userCode,cashOnly:requestMode==='cash',summary:(offered?.name||'Cash only')+' + ₹'+amount.toFixed(2)+' Cr',stage:'team',status:'submitted',createdAt:new Date().toISOString()};
   if(!teamAccepts(o)){save(teams,{...saved,offers:[...saved.offers,{...o,status:'team_rejected',teamDecision:'rejected'}]});return;}
@@ -114,7 +130,7 @@ function TradeWindow({game,career,onSave}){
  };
  const decidePlayer=(o,accept)=>{
   if(!accept){updateOffer(o.id,{status:'player_rejected',playerDecision:'rejected'});return;}
-  const next=execute(o);save(next,{...saved,offers:saved.offers.map(x=>x.id===o.id?{...x,status:'completed',playerDecision:'accepted'}:x)});
+  const next=execute(o);if(!next){updateOffer(o.id,{status:'player_rejected',playerDecision:'rejected',decisionNote:'Player was no longer available'});return;}save(next,{...saved,offers:saved.offers.map(x=>x.id===o.id?{...x,status:'completed',playerDecision:'accepted'}:x)});
  };
  const decideIncoming=(o,accept)=>{
   if(!accept){updateOffer(o.id,{status:'team_rejected',teamDecision:'rejected'});return;}
@@ -124,6 +140,9 @@ function TradeWindow({game,career,onSave}){
  const counter=(o)=>{
   const extra=Number(counterCash||0),myPlayer=findPlayer(userTeam,counterPlayer);
   if(extra<0||extra>Number(userTeam.purse||0))return setErr('Counter cash exceeds your available purse.');
+  if(myPlayer&&(isProtected(myPlayer)||isReserved(userCode,counterPlayer)))return setErr('That player is retained or already involved in another trade.');
+  const otherPlayer=findPlayer(teams.find(t=>t.code===o.from),o.offeredPlayer);
+  if(otherPlayer&&isProtected(otherPlayer))return setErr('Retained players cannot be traded.');
   const revised={...o,id:o.id+'-counter-'+Date.now(),from:userCode,to:o.from,offeredPlayer:myPlayer?(myPlayer.id||myPlayer.name):null,requestedPlayer:o.offeredPlayer||null,cashCr:extra,cashFrom:userCode,cashOnly:false,summary:(myPlayer?.name||'Cash only')+' + ₹'+extra.toFixed(2)+' Cr for '+(findPlayer(teams.find(t=>t.code===o.from),o.offeredPlayer)?.name||'cash'),status:'submitted',stage:'team',source:'counter'};
   const accepted=teamAccepts(revised);
   save(teams,{...saved,offers:[...saved.offers,{...o,status:'countered',teamDecision:'countered'},{...revised,status:accepted?'awaiting_player':'team_rejected',teamDecision:accepted?'accepted':'rejected',stage:accepted?'player':'team'}]});
@@ -139,13 +158,13 @@ function TradeWindow({game,career,onSave}){
   {saved.status==='not_started'?<><p>Trading lasts 10 minutes. Make player swaps, cash-only offers or cash-plus-player deals. Incoming AI offers arrive when the window opens. Team approval comes first, followed by player consent.</p><button className="primary-btn" onClick={start}><Clock size={16}/> Start 10-minute trading window</button></>:<>
    <div className="metric"><Clock/><div><strong>{active?mins+':'+String(secs).padStart(2,'0')+' remaining':'Window closed'}</strong><span>Maximum 4 player movements per franchise · cash deals do not count</span></div></div>
    {active&&<button className="secondary-btn" onClick={end}>End trading window</button>}
-   {pending.length>0&&<><h3>Incoming offers · franchise decision</h3>{pending.map(o=><div className="squad-card" key={o.id}><b>{teamName(o.from)} offer</b><p>{fmt(teams.find(t=>t.code===o.from),o.offeredPlayer)} {o.cashCr?'+ ₹'+Number(o.cashCr).toFixed(2)+' Cr':''} for {o.requestedPlayer?fmt(userTeam,o.requestedPlayer):'cash only'}</p><button className="primary-btn" onClick={()=>decideIncoming(o,true)}>Accept offer</button> <button className="secondary-btn" onClick={()=>decideIncoming(o,false)}>Reject</button><div className="field-grid" style={{marginTop:10}}><label className="field-label">Counter: your player (optional)<select value={counterPlayer} onChange={e=>setCounterPlayer(e.target.value)}><option value="">Cash only</option>{userTeam.squad.filter(p=>!isCore(userTeam,p)).map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}</option>)}</select></label><label className="field-label">Cash you add (₹ Cr)<input type="number" min="0" step="0.05" value={counterCash} onChange={e=>setCounterCash(e.target.value)}/></label></div><button className="secondary-btn" onClick={()=>counter(o)}>Send counteroffer</button></div>)}</>}
+   {pending.length>0&&<><h3>Incoming offers · franchise decision</h3>{pending.map(o=><div className="squad-card" key={o.id}><b>{teamName(o.from)} offer</b><p>{fmt(teams.find(t=>t.code===o.from),o.offeredPlayer)} {o.cashCr?'+ ₹'+Number(o.cashCr).toFixed(2)+' Cr':''} for {o.requestedPlayer?fmt(userTeam,o.requestedPlayer):'cash only'}</p><button className="primary-btn" onClick={()=>decideIncoming(o,true)}>Accept offer</button> <button className="secondary-btn" onClick={()=>decideIncoming(o,false)}>Reject</button><div className="field-grid" style={{marginTop:10}}><label className="field-label">Counter: your player (optional)<select value={counterPlayer} onChange={e=>setCounterPlayer(e.target.value)}><option value="">Cash only</option>{userTeam.squad.filter(p=>!isProtected(p)&&!isReserved(userCode,p)&&!isCore(userTeam,p)).map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}</option>)}</select></label><label className="field-label">Cash you add (₹ Cr)<input type="number" min="0" step="0.05" value={counterCash} onChange={e=>setCounterCash(e.target.value)}/></label></div><button className="secondary-btn" onClick={()=>counter(o)}>Send counteroffer</button></div>)}</>}
    {playerPending.length>0&&<><h3>Player consent · final approval</h3>{playerPending.map(o=><div className="squad-card" key={o.id}><b>{o.from===userCode?'Your outgoing player':'Incoming player'} · awaiting player decision</b><p>{teamName(o.from)} → {teamName(o.to)} · {fmt(teams.find(t=>t.code===o.from),o.offeredPlayer)} {o.requestedPlayer?'for '+fmt(teams.find(t=>t.code===o.to),o.requestedPlayer):''} · ₹{Number(o.cashCr||0).toFixed(2)} Cr</p><button className="primary-btn" onClick={()=>decidePlayer(o,true)}>Player agrees · complete trade</button> <button className="secondary-btn" onClick={()=>decidePlayer(o,false)}>Player rejects</button></div>)}</>}
    {active&&<><h3>Make a trade offer</h3><div className="field-grid">
     <label className="field-label">Franchise<select value={target} onChange={e=>{setTarget(e.target.value);setGet('');}}>{teams.filter(t=>t.code!==userCode).map(t=><option key={t.code} value={t.code}>{t.name}</option>)}</select></label>
     <label className="field-label">Your player<select value={give} onChange={e=>setGive(e.target.value)}><option value="">Cash only</option>{userTeam.squad.filter(p=>!isCore(userTeam,p)||get).map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}{isCore(userTeam,p)?' · core':''}</option>)}</select></label>
     <label className="field-label">Deal type<select value={requestMode} onChange={e=>setRequestMode(e.target.value)}><option value="player">Request a player</option><option value="cash">Request cash only</option></select></label>
-    {requestMode==='player'&&<label className="field-label">Player requested<select value={get} onChange={e=>setGet(e.target.value)}><option value="">Choose player</option>{(teams.find(t=>t.code===target)?.squad||[]).map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}{isCore(teams.find(t=>t.code===target),p)?' · core protected':''}</option>)}</select></label>}
+    {requestMode==='player'&&<label className="field-label">Player requested<select value={get} onChange={e=>setGet(e.target.value)}><option value="">Choose player</option>{(teams.find(t=>t.code===target)?.squad||[]).filter(p=>!isProtected(p)&&!isReserved(target,p)).map(p=><option key={p.id||p.name} value={p.id||p.name}>{p.name}{isCore(teams.find(t=>t.code===target),p)?' · core protected':''}</option>)}</select></label>}
     <label className="field-label">Cash added by you (₹ Cr)<input type="number" min="0" step="0.05" max={userTeam.purse||0} value={cash} onChange={e=>setCash(e.target.value)}/><small>Available purse: ₹{Number(userTeam.purse||0).toFixed(2)} Cr</small></label>
    </div>{err&&<p className="error">{err}</p>}<button className="primary-btn" onClick={submit}>Submit offer</button></>}
    <h3>Trade history</h3>{(saved.offers||[]).map(o=><div className="squad-card" key={o.id}><b>{teamName(o.from)} → {teamName(o.to)}</b><p>{o.summary}</p><small>Status: {String(o.status).replaceAll('_',' ')} · {o.teamDecision||'pending team decision'} {o.playerDecision?'· Player '+o.playerDecision:''}</small></div>)}
