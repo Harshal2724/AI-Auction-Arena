@@ -61,6 +61,7 @@ function TradeWindow({game,career,onSave}){
  const completed=(saved.offers||[]).filter(o=>o.status==='completed');
  const reservedKeys=new Set((saved.offers||[]).filter(o=>['submitted','awaiting_player','completed'].includes(o.status)).flatMap(o=>[[o.from,o.offeredPlayer],[o.to,o.requestedPlayer]].filter(x=>x[1]).map(x=>x[0]+'|'+String(x[1]))));
  const isReserved=(teamCode,player)=>!!player&&reservedKeys.has(teamCode+'|'+String(player.id||player.name));
+ const isReservedByOther=(teamCode,player,offerId)=>!!player&&(saved.offers||[]).some(x=>x.id!==offerId&&['submitted','awaiting_player','completed'].includes(x.status)&&((x.from===teamCode&&String(x.offeredPlayer)===String(player.id||player.name))||(x.to===teamCode&&String(x.requestedPlayer)===String(player.id||player.name))));
  const isProtected=p=>!!p?.retained||String(p?.status||'').toLowerCase()==='retained';
  const playerMovements=code=>completed.reduce((n,o)=>n+((o.from===code&&o.offeredPlayer)?1:0)+((o.to===code&&o.requestedPlayer)?1:0),0);
  const canMove=(code,count=1)=>playerMovements(code)+count<=4;
@@ -72,8 +73,8 @@ function TradeWindow({game,career,onSave}){
   const offered=findPlayer(from,o.offeredPlayer),requested=findPlayer(to,o.requestedPlayer);
   if(o.offeredPlayer&&!offered||o.requestedPlayer&&!requested)return false;
   if(isProtected(offered)||isProtected(requested))return false;
-  if(offered&&isReserved(from.code,o.offeredPlayer)&&o.status!=='awaiting_player')return false;
-  if(requested&&isReserved(to.code,o.requestedPlayer)&&o.status!=='awaiting_player')return false;
+  if(offered&&isReservedByOther(from.code,offered,o.id))return false;
+  if(requested&&isReservedByOther(to.code,requested,o.id))return false;
   if(offered&&!canMove(from.code)||requested&&!canMove(to.code))return false;
   if(requested&&isCore(to,requested)&&(!offered||tradeValue(offered)<tradeValue(requested)*0.9))return false;
   if(offered&&isCore(from,offered)&&(!requested||tradeValue(requested)<tradeValue(offered)*0.9))return false;
@@ -88,7 +89,7 @@ function TradeWindow({game,career,onSave}){
   const from=next.find(t=>t.code===o.from),to=next.find(t=>t.code===o.to);
   const offered=findPlayer(from,o.offeredPlayer),requested=findPlayer(to,o.requestedPlayer);
   if((o.offeredPlayer&&!offered)||(o.requestedPlayer&&!requested)||isProtected(offered)||isProtected(requested))return null;
-  const duplicate=next.some(t=>t.squad.some(p=>(offered&&String(p.id||p.name)===String(offered.id||offered.name))||(requested&&String(p.id||p.name)===String(requested.id||requested.name))));
+  const duplicate=next.some(t=>t.squad.some(p=>(offered&&t.code!==from.code&&String(p.id||p.name)===String(offered.id||offered.name))||(requested&&t.code!==to.code&&String(p.id||p.name)===String(requested.id||requested.name))));
   if(duplicate)return null;
   if(offered){from.squad=from.squad.filter(p=>p.name!==offered.name);to.squad.push({...offered,status:'Traded',tradedFrom:from.code});}
   if(requested){to.squad=to.squad.filter(p=>p.name!==requested.name);from.squad.push({...requested,status:'Traded',tradedFrom:to.code});}
