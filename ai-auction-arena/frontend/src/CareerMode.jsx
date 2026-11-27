@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Play, Trophy, Award, RotateCcw, ArrowLeftRight, Clock, Check, X, Handshake } from 'lucide-react';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -50,6 +50,8 @@ function TradeWindow({game,career,onSave}){
  const [requestMode,setRequestMode]=useState('player');const [counterCash,setCounterCash]=useState('');const [counterPlayer,setCounterPlayer]=useState('');
  const [err,setErr]=useState('');
  const saved=game.tradeWindow||{status:'not_started',offers:[]};
+ const [,tick]=useState(0);
+ useEffect(()=>{if(saved.status!=='open'||!saved.startedAt)return;const timer=setInterval(()=>{tick(v=>v+1);if(Date.now()>=new Date(saved.startedAt).getTime()+600000){clearInterval(timer);onSave({...game,tradeWindow:{...saved,status:'closed',closedAt:new Date().toISOString()}});}},1000);return ()=>clearInterval(timer);},[saved.status,saved.startedAt]);
  const endAt=saved.startedAt?new Date(saved.startedAt).getTime()+10*60000:0;
  const active=saved.status==='open'&&Date.now()<endAt;
  const secondsLeft=saved.startedAt?Math.max(0,Math.ceil((endAt-Date.now())/1000)):600;
