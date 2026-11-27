@@ -96,7 +96,7 @@ function TradeWindow({game,career,onSave}){
    const requested=[...(userTeam.squad||[])].filter(p=>!isCore(userTeam,p)).sort((a,b)=>tradeValue(a)-tradeValue(b))[0];
    const offered=candidates[Math.min(candidates.length-1,1)];
    if(offered&&requested)incoming.push({id:'ai-'+t.code+'-'+Date.now(),from:t.code,to:userCode,offeredPlayer:offered.id||offered.name,requestedPlayer:requested.id||requested.name,cashCr:0,cashFrom:t.code,cashOnly:false,summary:offered.name+' for '+requested.name,stage:'team',status:'submitted',createdAt:new Date().toISOString(),source:'AI'});
-   else if(offered)incoming.push({id:'ai-cash-'+t.code+'-'+Date.now(),from:t.code,to:userCode,offeredPlayer:null,requestedPlayer:offered.id||offered.name,cashCr:0.5,cashFrom:t.code,cashOnly:true,summary:'₹0.50 Cr cash for '+offered.name,stage:'team',status:'submitted',createdAt:new Date().toISOString(),source:'AI'});
+   else if(requested)incoming.push({id:'ai-cash-'+t.code+'-'+Date.now(),from:t.code,to:userCode,offeredPlayer:null,requestedPlayer:requested.id||requested.name,cashCr:0.5,cashFrom:t.code,cashOnly:true,summary:'₹0.50 Cr cash for '+requested.name,stage:'team',status:'submitted',createdAt:new Date().toISOString(),source:'AI'});
   }
   save(teams,{status:'open',startedAt:new Date().toISOString(),offers:incoming});
  };
@@ -124,7 +124,7 @@ function TradeWindow({game,career,onSave}){
  const counter=(o)=>{
   const extra=Number(counterCash||0),myPlayer=findPlayer(userTeam,counterPlayer);
   if(extra<0||extra>Number(userTeam.purse||0))return setErr('Counter cash exceeds your available purse.');
-  const revised={...o,id:o.id+'-counter-'+Date.now(),from:userCode,to:o.from,offeredPlayer:myPlayer?(myPlayer.id||myPlayer.name):null,requestedPlayer:o.offeredPlayer||null,cashCr:extra,cashFrom:userCode,cashOnly:!myPlayer&&!o.offeredPlayer,summary:(myPlayer?.name||'Cash only')+' + ₹'+extra.toFixed(2)+' Cr for '+(findPlayer(teams.find(t=>t.code===o.from),o.offeredPlayer)?.name||'cash'),status:'submitted',stage:'team',source:'counter'};
+  const revised={...o,id:o.id+'-counter-'+Date.now(),from:userCode,to:o.from,offeredPlayer:myPlayer?(myPlayer.id||myPlayer.name):null,requestedPlayer:o.offeredPlayer||null,cashCr:extra,cashFrom:userCode,cashOnly:false,summary:(myPlayer?.name||'Cash only')+' + ₹'+extra.toFixed(2)+' Cr for '+(findPlayer(teams.find(t=>t.code===o.from),o.offeredPlayer)?.name||'cash'),status:'submitted',stage:'team',source:'counter'};
   const accepted=teamAccepts(revised);
   save(teams,{...saved,offers:[...saved.offers,{...o,status:'countered',teamDecision:'countered'},{...revised,status:accepted?'awaiting_player':'team_rejected',teamDecision:accepted?'accepted':'rejected',stage:accepted?'player':'team'}]});
   setCounterCash('0');setCounterPlayer('');setErr('');
